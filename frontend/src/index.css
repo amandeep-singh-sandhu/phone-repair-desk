@@ -1,0 +1,97 @@
+@import "tailwindcss";
+@tailwind utilities;
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes popIn {
+  from { 
+    opacity: 0; 
+    transform: scale(0.96) translateY(8px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1) translateY(0); 
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.18s ease-out forwards;
+}
+
+.animate-pop-in {
+  animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@theme {
+  --color-brand-50: #f0fdf4;
+  --color-brand-100: #dcfce7;
+  --color-brand-500: #16a34a;
+  --color-brand-700: #15803d;
+  --color-brand-900: #064e3b;
+}
+
+body {
+  margin: 0;
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer utilities {
+  /* Reserves space for the scrollbar so content never jumps */
+  .scrollbar-gutter-stable {
+    scrollbar-gutter: stable;
+  }
+}
+
+/* -------------------------------------------------------------
+   GLOBAL GLASSMORPHIC SCROLLBAR DESIGN
+   Applies to the entire page (Kanban board, search lists, drawers)
+------------------------------------------------------------- */
+
+/* Standard Firefox styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+}
+
+/* Chrome, Edge, Safari (WebKit) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+/* Scrollbar Track (Fully translucent/invisible until scroll) */
+::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px;
+}
+
+/* Scrollbar Thumb (Frosted Glass Pill) */
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.25);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s ease-in-out;
+}
+
+/* Hover state: illuminates to a bright cyan/indigo glass */
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.55);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+}
+
+/* Active Drag state */
+::-webkit-scrollbar-thumb:active {
+  background: rgba(129, 140, 248, 0.8);
+}
+
+/* Hide scrollbar corner joints */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
