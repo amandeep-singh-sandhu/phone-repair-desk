@@ -30,7 +30,7 @@ export interface Ticket {
 	customer?: Customer; // Populated nested customer object for easy UI display
 	deviceBrand: string; // Manufacturer (e.g., "Apple", "Samsung")
 	deviceModel: string; // Model name (e.g., "iPhone 13 Pro")
-	imeiOrSerial?: string; // Optional: Device IMEI or serial number for identification
+	IMEIOrSerial?: string; // Optional: Device IMEI or serial number for identification
 	issueDescription: string; // The problem reported during check-in
 	diagnosticNotes?: string; // Optional: Technician internal repair notes
 	estimatedCost?: number; // Preliminary repair quote in dollars
@@ -53,7 +53,7 @@ export type CreateTicketPayload = {
 	};
 	deviceBrand: string;
 	deviceModel: string;
-	imeiOrSerial?: string;
+	IMEIOrSerial?: string;
 	issueDescription: string;
 	diagnosticNotes?: string;
 	estimatedCost?: number;
