@@ -1,7 +1,10 @@
 // frontend/src/components/TicketDetailDrawer.tsx
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Ticket, TicketStatus } from "../types";
+import { WORKFLOW_STAGES, PRIORITY_STYLES } from "../constants/workflow";
+import { useEscapeKey } from "../hooks/useEscapeKey";
+import { DeleteActionButton } from "./common/DeleteActionButton";
 import {
 	X,
 	Smartphone,
@@ -12,43 +15,92 @@ import {
 	Calendar,
 	DollarSign,
 	CheckCircle2,
+	FileText,
+	BellRing,
+	Package,
+	Wrench,
+	Save,
+	Check,
+	Edit3,
+	Trash2,
 } from "lucide-react";
 
 interface DrawerProps {
 	ticket: Ticket | null;
 	isOpen: boolean;
 	onClose: () => void;
-	onUpdateStatus: (ticketId: string, status: TicketStatus) => void;
+	onUpdateStatus: (
+		ticketId: string,
+		status: TicketStatus,
+		notes?: string,
+	) => Promise<void> | void;
+	onDeleteTicket?: (ticketId: string) => Promise<void> | void;
 }
-
-const ALL_STATUSES: { id: TicketStatus; label: string }[] = [
-	{ id: "received", label: "Received" },
-	{ id: "diagnosing", label: "Diagnosing" },
-	{ id: "waiting_for_parts", label: "Parts Pending" },
-	{ id: "in_progress", label: "In Progress" },
-	{ id: "ready", label: "Ready" },
-	{ id: "delivered", label: "Delivered" },
-];
 
 export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 	ticket,
 	isOpen,
 	onClose,
 	onUpdateStatus,
+	onDeleteTicket,
 }) => {
+	const [techNotes, setTechNotes] = useState("");
+	const [isEditingNotes, setIsEditingNotes] = useState(false);
+	const [isSavingNotes, setIsSavingNotes] = useState(false);
+	const [savedSuccess, setSavedSuccess] = useState(false);
+
+	useEscapeKey(onClose, isOpen);
+
+	// 1. Reset editing mode to FALSE whenever ticket changes
 	useEffect(() => {
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === "Escape") onClose();
-		};
-		if (isOpen) window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [isOpen, onClose]);
+		if (ticket) {
+			setTechNotes(ticket.diagnosticNotes || "");
+			setIsEditingNotes(false); // <-- ALWAYS start in view/display mode
+		}
+	}, [ticket?.id]);
+
+	const handleSaveNotes = async () => {
+		if (!ticket) return;
+		setIsSavingNotes(true);
+		try {
+			await onUpdateStatus(ticket.id, ticket.status, techNotes.trim());
+			setSavedSuccess(true);
+			setIsEditingNotes(false);
+			setTimeout(() => setSavedSuccess(false), 2000);
+		} finally {
+			setIsSavingNotes(false);
+		}
+	};
+
+	const handleClearNotes = async (e?: React.MouseEvent) => {
+		if (e) {
+			e.stopPropagation();
+			e.preventDefault();
+		}
+
+		if (!ticket) return;
+		if (
+			!window.confirm("Are you sure you want to clear these technician notes?")
+		)
+			return;
+
+		setIsSavingNotes(true);
+		try {
+			await onUpdateStatus(ticket.id, ticket.status, "");
+			setTechNotes("");
+			setIsEditingNotes(false); // Keep closed
+			setSavedSuccess(true);
+			setTimeout(() => setSavedSuccess(false), 2000);
+		} finally {
+			setIsSavingNotes(false);
+		}
+	};
 
 	return (
 		<AnimatePresence>
 			{isOpen && ticket && (
 				<div className="fixed inset-0 z-50 overflow-hidden">
-					{/* Backdrop with Fade */}
+					{/* Backdrop */}
 					<motion.div
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
@@ -58,26 +110,15 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 						className="fixed inset-0 bg-black/75 backdrop-blur-xs cursor-pointer"
 					/>
 
-					{/* Slide Panel Positioning */}
+					{/* Slide Panel */}
 					<div className="fixed inset-y-0 right-0 flex max-w-full pointer-events-none">
 						<motion.div
 							initial={{ x: "100%" }}
 							animate={{ x: 0 }}
 							exit={{ x: "100%" }}
 							transition={{ type: "spring", damping: 30, stiffness: 300 }}
-							/* 
-                Notice: 
-                - No overflow-hidden on this outer wrapper, allowing outward shadow projection
-                - border-indigo-500/40 defines a sleek edge
-                - shadow-[-25px_0_60px...] radiates soft indigo light out to the left onto the backdrop
-              */
 							className="relative w-screen max-w-xl bg-[#0c1222] border-l border-indigo-500/30 flex flex-col justify-between pointer-events-auto shadow-[-25px_0_60px_-10px_rgba(99,102,241,0.35)]"
 						>
-							{/* 
-                EXTERNAL GLOWING BEAM:
-                - Positioned at -left-[1.5px] strictly outside the drawer boundary
-                - shadow-[-6px_0_20px_2px_rgba(99,102,241,0.7)] projects illumination outwards to the left
-              */}
 							<div
 								className="absolute inset-y-0 left-[-1.5px] w-0.5 bg-linear-to-b from-transparent via-indigo-400 to-transparent pointer-events-none z-30 shadow-[-6px_0_22px_2px_rgba(99,102,241,0.7)]"
 								aria-hidden="true"
@@ -90,36 +131,50 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 										<span className="font-mono text-xs font-semibold text-indigo-400 bg-indigo-950/60 border border-indigo-800/40 px-2.5 py-0.5 rounded-md">
 											{ticket.ticketNumber}
 										</span>
-										<span className="text-xs uppercase tracking-wide font-medium text-slate-400">
-											Priority:{" "}
-											<strong className="text-slate-200">
-												{ticket.priority}
-											</strong>
+										<span
+											className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider border ${
+												PRIORITY_STYLES[ticket.priority] ||
+												PRIORITY_STYLES.medium
+											}`}
+										>
+											{ticket.priority}
 										</span>
 									</div>
 									<h2 className="text-lg font-bold text-white mt-1.5">
 										{ticket.deviceBrand} {ticket.deviceModel}
 									</h2>
 								</div>
-								{/* Close Action Button */}
-                                <motion.button
-                                    whileHover={{ scale: 1.08, rotate: 90 }}
-                                    whileTap={{ scale: 0.92 }}
-                                    onClick={onClose}
-                                    className="absolute top-5 right-5 z-40 p-2 text-slate-400 hover:text-white rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 shadow-lg transition-colors cursor-pointer"
-                                >
-                                    <X className="w-4 h-4" />
-                                </motion.button>
+
+								{/* Header Controls */}
+								<div className="flex items-center gap-2">
+									{onDeleteTicket && (
+										<DeleteActionButton
+											onDelete={() => onDeleteTicket(ticket.id)}
+										/>
+									)}
+
+									<motion.button
+										whileHover={{ scale: 1.08, rotate: 90 }}
+										whileTap={{ scale: 0.92 }}
+										type="button"
+										onClick={onClose}
+										className="p-2 text-slate-400 hover:text-white rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 shadow-lg transition-colors cursor-pointer"
+										title="Close Drawer"
+									>
+										<X className="w-4 h-4" />
+									</motion.button>
+								</div>
 							</div>
 
-							{/* Body Content */}
+							{/* Drawer Body */}
 							<div className="flex-1 overflow-y-auto p-6 space-y-6">
+								{/* Workflow Status Selector */}
 								<div>
 									<label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2.5 block">
 										Update Workflow Stage
 									</label>
 									<div className="grid grid-cols-3 gap-2">
-										{ALL_STATUSES.map((st) => {
+										{WORKFLOW_STAGES.map((st) => {
 											const isActive = ticket.status === st.id;
 											return (
 												<motion.button
@@ -127,14 +182,16 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 													whileHover={{ scale: 1.02 }}
 													whileTap={{ scale: 0.98 }}
 													type="button"
-													onClick={() => onUpdateStatus(ticket.id, st.id)}
+													onClick={() =>
+														onUpdateStatus(ticket.id, st.id, techNotes)
+													}
 													className={`text-xs font-medium py-2.5 px-3 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${
 														isActive
 															? "border-indigo-500 bg-indigo-950/50 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.2)]"
 															: "border-slate-800 bg-slate-900/40 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
 													}`}
 												>
-													<span>{st.label}</span>
+													<span>{st.badgeLabel}</span>
 													{isActive && (
 														<CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />
 													)}
@@ -144,7 +201,7 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 									</div>
 								</div>
 
-								{/* Customer Information Card */}
+								{/* Customer Details */}
 								<div className="bg-[#111827]/70 rounded-xl p-4 border border-slate-800/80">
 									<h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
 										<User className="w-3.5 h-3.5 text-indigo-400" /> Customer
@@ -164,6 +221,14 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 											<div className="flex items-center gap-2 text-slate-400 text-xs">
 												<Mail className="w-3.5 h-3.5 text-slate-500" />
 												<span>{ticket.customer.email}</span>
+											</div>
+										)}
+										{ticket.notificationPreference && (
+											<div className="flex items-center gap-2 text-indigo-300 text-xs mt-1">
+												<BellRing className="w-3.5 h-3.5 text-indigo-400" />
+												<span className="capitalize">
+													Notify via: {ticket.notificationPreference}
+												</span>
 											</div>
 										)}
 									</div>
@@ -191,9 +256,157 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 											{ticket.issueDescription}
 										</p>
 									</div>
+
+									{ticket.clientNotes && (
+										<div className="bg-[#111827]/70 border border-slate-800/80 rounded-xl p-3.5">
+											<div className="text-xs text-slate-500 font-medium mb-1 flex items-center gap-1.5">
+												<FileText className="w-3 h-3 text-slate-400" /> Client
+												Notes / Instructions
+											</div>
+											<p className="text-xs text-slate-300 italic">
+												"{ticket.clientNotes}"
+											</p>
+										</div>
+									)}
 								</div>
 
-								{/* Pricing & Dates */}
+								{/* Tech & Parts Log */}
+								{/* TECHNICIAN & PARTS NOTE (VIEW / EDIT / CLEAR TOGGLE) */}
+								<div className="bg-[#111827]/70 border border-slate-800/80 rounded-xl p-4 space-y-2.5">
+									<div className="flex items-center justify-between">
+										<h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+											{ticket.status === "waiting_for_parts" ? (
+												<>
+													<Package className="w-3.5 h-3.5 text-amber-400" />{" "}
+													Parts & Supplier Order
+												</>
+											) : (
+												<>
+													<Wrench className="w-3.5 h-3.5 text-indigo-400" />{" "}
+													Diagnostic & Tech Note
+												</>
+											)}
+										</h3>
+
+										{/* Header Controls */}
+										<div className="flex items-center gap-2">
+											{savedSuccess && (
+												<span className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
+													<Check className="w-3.5 h-3.5" /> Updated
+												</span>
+											)}
+
+											{isEditingNotes ? (
+												<div className="flex items-center gap-1.5">
+													{/* Cancel button */}
+													<button
+														type="button"
+														onClick={() => {
+															setTechNotes(ticket.diagnosticNotes || "");
+															setIsEditingNotes(false);
+														}}
+														className="text-[11px] text-slate-400 hover:text-slate-200 px-2 py-1 rounded-lg transition cursor-pointer"
+													>
+														Cancel
+													</button>
+
+													{/* Clear note if there was an existing note saved */}
+													{ticket.diagnosticNotes && (
+														<button
+															type="button"
+															disabled={isSavingNotes}
+															onClick={(e) => handleClearNotes(e)}
+															className="flex items-center gap-1 text-[11px] font-semibold text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+															title="Clear all technician notes"
+														>
+															<Trash2 className="w-3 h-3" /> Clear
+														</button>
+													)}
+
+													{/* Save button */}
+													<button
+														type="button"
+														disabled={isSavingNotes || !techNotes.trim()}
+														onClick={handleSaveNotes}
+														className="flex items-center gap-1.5 text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 px-3 py-1.5 rounded-lg shadow-sm shadow-indigo-600/30 transition cursor-pointer"
+													>
+														<Save className="w-3.5 h-3.5" />{" "}
+														{isSavingNotes ? "Saving..." : "Save Note"}
+													</button>
+												</div>
+											) : ticket.diagnosticNotes ? (
+												<div className="flex items-center gap-1.5">
+													{/* Clear Button in reading view */}
+													<button
+														type="button"
+														disabled={isSavingNotes}
+														onClick={handleClearNotes}
+														className="flex items-center gap-1 text-[11px] font-semibold text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+														title="Clear all technician notes"
+													>
+														<Trash2 className="w-3 h-3" /> Clear
+													</button>
+
+													{/* Edit Button */}
+													<button
+														type="button"
+														onClick={() => setIsEditingNotes(true)}
+														className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 hover:text-white bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+													>
+														<Edit3 className="w-3.5 h-3.5 text-indigo-400" />{" "}
+														Edit
+													</button>
+												</div>
+											) : (
+												/* Add Note Button */
+												<button
+													type="button"
+													onClick={() => setIsEditingNotes(true)}
+													className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-300 hover:text-white bg-indigo-950/60 hover:bg-indigo-900/70 border border-indigo-800/50 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+												>
+													<Edit3 className="w-3.5 h-3.5 text-indigo-400" /> Add
+													Note
+												</button>
+											)}
+										</div>
+									</div>
+
+									{/* Body */}
+									{isEditingNotes ? (
+										<textarea
+											autoFocus
+											rows={3}
+											value={techNotes}
+											onChange={(e) => setTechNotes(e.target.value)}
+											placeholder={
+												ticket.status === "waiting_for_parts"
+													? "Specify required components (e.g., OEM AMOLED Panel, Vendor PO #8491, ETA Friday)..."
+													: "Document test voltages, diagnostic results, bench observations, or repairs completed..."
+											}
+											className="w-full text-xs rounded-xl p-3 bg-slate-950/90 border border-slate-800 text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-hidden resize-none leading-relaxed"
+										/>
+									) : ticket.diagnosticNotes ? (
+										<p className="text-xs text-slate-200 leading-relaxed bg-slate-950/40 p-3 rounded-lg border border-slate-800/60 whitespace-pre-wrap">
+											{ticket.diagnosticNotes}
+										</p>
+									) : (
+										<div
+											onClick={() => setIsEditingNotes(true)}
+											className="group flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl border border-dashed border-slate-800/80 hover:border-indigo-500/50 bg-slate-950/30 hover:bg-indigo-950/10 cursor-pointer transition-all duration-200 text-center"
+										>
+											<div className="flex items-center gap-1.5 text-xs font-medium text-slate-400 group-hover:text-indigo-300 transition-colors">
+												<Edit3 className="w-3.5 h-3.5 text-indigo-400" />
+												<span>No technician notes recorded yet</span>
+											</div>
+											<p className="text-[11px] text-slate-500 group-hover:text-slate-400 transition-colors">
+												Click to log diagnostic bench checks, component
+												findings, or part order details.
+											</p>
+										</div>
+									)}
+								</div>
+
+								{/* Pricing & Intake Date */}
 								<div className="grid grid-cols-2 gap-3 pt-2">
 									<div className="border border-slate-800 bg-[#111827]/50 p-3.5 rounded-xl flex items-center gap-3">
 										<div className="p-2 bg-emerald-950/40 text-emerald-400 rounded-lg border border-emerald-900/50">
@@ -206,7 +419,7 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 											<div className="text-base font-bold text-white">
 												$
 												{ticket.estimatedCost
-													? ticket.estimatedCost.toFixed(2)
+													? Number(ticket.estimatedCost).toFixed(2)
 													: "0.00"}
 											</div>
 										</div>
@@ -229,11 +442,20 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 							</div>
 
 							{/* Footer */}
-							<div className="p-4 border-t border-slate-800/80 bg-slate-950/50 flex justify-end">
+							<div className="p-4 border-t border-slate-800/80 bg-slate-950/50 flex justify-between items-center">
+								{onDeleteTicket ? (
+									<DeleteActionButton
+										variant="button"
+										onDelete={() => onDeleteTicket(ticket.id)}
+									/>
+								) : (
+									<div />
+								)}
+
 								<button
 									type="button"
 									onClick={onClose}
-									className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 cursor-pointer"
+									className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 cursor-pointer transition-colors"
 								>
 									Close
 								</button>
@@ -244,4 +466,4 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 			)}
 		</AnimatePresence>
 	);
-};
+};;;

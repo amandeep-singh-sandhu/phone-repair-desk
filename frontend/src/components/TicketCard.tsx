@@ -2,12 +2,13 @@
 import React from "react";
 import { motion } from "framer-motion";
 import type { Ticket, TicketStatus } from "../types";
-import { Smartphone, User, ArrowRight } from "lucide-react";
+import { Smartphone, User, ArrowRight, Trash2 } from "lucide-react";
 
 interface TicketCardProps {
 	ticket: Ticket;
 	onStatusChange: (ticketId: string, nextStatus: TicketStatus) => void;
 	onClick: (ticket: Ticket) => void;
+	onDelete?: (ticketId: string) => void;
 }
 
 const statusFlow: Record<TicketStatus, TicketStatus | null> = {
@@ -23,6 +24,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 	ticket,
 	onStatusChange,
 	onClick,
+	onDelete,
 }) => {
 	const nextStatus = statusFlow[ticket.status];
 
@@ -51,15 +53,33 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 			className="group relative bg-[#131b2e] hover:bg-[#17223b] border border-slate-800/80 hover:border-indigo-500/50 rounded-xl p-4 shadow-md hover:shadow-xl hover:shadow-indigo-500/10 transition-colors duration-150 cursor-pointer flex flex-col justify-between gap-3 shrink-0"
 		>
 			<div>
-				<div className="flex justify-between items-start mb-2.5">
+				{/* Header: Ticket Number, Delete Icon & Priority Badge */}
+				<div className="flex justify-between items-center mb-2.5">
 					<span className="text-[11px] font-mono font-medium text-slate-400 group-hover:text-indigo-300 transition-colors">
 						{ticket.ticketNumber}
 					</span>
-					<span
-						className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider border ${priorityStyles[ticket.priority]}`}
-					>
-						{ticket.priority}
-					</span>
+
+					<div className="flex items-center gap-1.5">
+						{onDelete && (
+							<button
+								type="button"
+								onClick={(e) => {
+									e.stopPropagation();
+									onDelete(ticket.id);
+								}}
+								className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/50 rounded-md border border-transparent hover:border-rose-900/50 transition-all cursor-pointer"
+								title="Delete Ticket"
+							>
+								<Trash2 className="w-3.5 h-3.5" />
+							</button>
+						)}
+
+						<span
+							className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider border ${priorityStyles[ticket.priority]}`}
+						>
+							{ticket.priority}
+						</span>
+					</div>
 				</div>
 
 				<div className="flex items-center gap-2 text-sm font-semibold text-slate-100 group-hover:text-white transition-colors">
@@ -74,12 +94,20 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 				</p>
 			</div>
 
+			{/* Footer: Customer Name, Estimated Quote, Advance Action */}
 			<div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-				<div className="flex items-center gap-1.5">
-					<User className="w-3.5 h-3.5 text-slate-500" />
-					<span className="truncate max-w-30 font-medium text-slate-300">
-						{ticket.customer?.name}
-					</span>
+				<div className="flex flex-col gap-0.5">
+					<div className="flex items-center gap-1.5">
+						<User className="w-3.5 h-3.5 text-slate-500" />
+						<span className="truncate max-w-28 font-medium text-slate-300">
+							{ticket.customer?.name || "Walk-in Client"}
+						</span>
+					</div>
+					{ticket.estimatedCost !== undefined && (
+						<span className="text-[11px] font-mono font-semibold text-emerald-400 pl-5">
+							${Number(ticket.estimatedCost).toFixed(2)}
+						</span>
+					)}
 				</div>
 
 				{nextStatus && (
