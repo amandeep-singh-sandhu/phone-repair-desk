@@ -62,7 +62,7 @@ A modern, full-stack management desk for electronic device repair shops. Track r
 
 #### **1. Clone the repository**
 
-- `git clone git@personal:amandeep-singh-sandhu/phone-repair-desk.git`
+- `git clone git@github.com:amandeep-singh-sandhu/phone-repair-desk.git`
 - `cd phone-repair-desk`
 
 #### **2. Backend Setup**
