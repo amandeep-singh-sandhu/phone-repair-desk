@@ -47,6 +47,8 @@ export const ticketController = {
 		}
 	},
 
+	// backend/src/controllers/ticketController.ts
+
 	createTicket: async (req: Request, res: Response) => {
 		try {
 			console.log(
@@ -54,20 +56,10 @@ export const ticketController = {
 				JSON.stringify(req.body, null, 2),
 			);
 
-			const {
-				customerId,
-				customer,
-				deviceBrand,
-				deviceModel,
-				imeiOrSerial,
-				issueDescription,
-				clientNotes,
-				diagnosticNotes,
-				notificationPreference,
-				estimatedCost,
-				priority,
-				status,
-			} = req.body;
+			// Support both nested payload ({ customer, ticket }) and flat payload
+			const ticketData = req.body.ticket || req.body;
+			const customerData = req.body.customer;
+			const customerId = req.body.customerId || ticketData.customerId;
 
 			let resolvedCustomerId: string | null = customerId || null;
 
@@ -79,10 +71,10 @@ export const ticketController = {
 				}
 			}
 
-			// 2. If new customer, generate UUID upfront and persist
+			// 2. If new customer (or no customerId), find existing by phone or create a new one
 			if (!resolvedCustomerId) {
-				const customerName = customer?.name?.trim();
-				const customerPhone = customer?.phone?.trim();
+				const customerName = customerData?.name?.trim();
+				const customerPhone = customerData?.phone?.trim();
 
 				if (!customerName || !customerPhone) {
 					return res.status(400).json({
@@ -91,16 +83,19 @@ export const ticketController = {
 					});
 				}
 
-				const newCustomerId = crypto.randomUUID();
-				const newCustomer = await Customer.create({
-					id: newCustomerId,
-					name: customerName,
-					phone: customerPhone,
-					email: customer?.email?.trim() || undefined,
+				// Deduplication guard: Find existing customer by phone or create new
+				const [customerRecord] = await Customer.findOrCreate({
+					where: { phone: customerPhone },
+					defaults: {
+						id: crypto.randomUUID(),
+						name: customerName,
+						phone: customerPhone,
+						email: customerData?.email?.trim() || null,
+					},
 				});
 
-				resolvedCustomerId = newCustomer.id || newCustomerId;
-				console.log("✅ Created New Customer with ID:", resolvedCustomerId);
+				resolvedCustomerId = customerRecord.id;
+				console.log("✅ Resolved Customer ID:", resolvedCustomerId);
 			}
 
 			if (!resolvedCustomerId) {
@@ -115,11 +110,10 @@ export const ticketController = {
 			const ticketNumber = `TICK-${Math.floor(1000 + Math.random() * 9000)}`;
 
 			// Parse estimated cost safely
+			const rawCost = ticketData.estimatedCost;
 			const parsedCost =
-				estimatedCost !== undefined &&
-				estimatedCost !== null &&
-				!isNaN(Number(estimatedCost))
-					? parseFloat(String(estimatedCost))
+				rawCost !== undefined && rawCost !== null && !isNaN(Number(rawCost))
+					? parseFloat(String(rawCost))
 					: undefined;
 
 			// 4. Create Ticket record
@@ -127,16 +121,17 @@ export const ticketController = {
 				id: newTicketId,
 				ticketNumber,
 				customerId: resolvedCustomerId,
-				deviceBrand: deviceBrand?.trim() || "Unknown",
-				deviceModel: deviceModel?.trim() || "Unknown",
-				imeiOrSerial: imeiOrSerial?.trim() || undefined,
-				issueDescription: issueDescription?.trim() || "No description provided",
-				clientNotes: clientNotes?.trim() || undefined,
-				diagnosticNotes: diagnosticNotes?.trim() || undefined,
-				notificationPreference: notificationPreference || "whatsapp",
+				deviceBrand: ticketData.deviceBrand?.trim() || "Unknown",
+				deviceModel: ticketData.deviceModel?.trim() || "Unknown",
+				imeiOrSerial: ticketData.imeiOrSerial?.trim() || undefined,
+				issueDescription:
+					ticketData.issueDescription?.trim() || "No description provided",
+				clientNotes: ticketData.clientNotes?.trim() || undefined,
+				diagnosticNotes: ticketData.diagnosticNotes?.trim() || undefined,
+				notificationPreference: ticketData.notificationPreference || "whatsapp",
 				estimatedCost: parsedCost,
-				priority: priority || "medium",
-				status: status || "received",
+				priority: ticketData.priority || "medium",
+				status: ticketData.status || "received",
 			});
 
 			console.log(
@@ -147,11 +142,10 @@ export const ticketController = {
 			);
 
 			// 5. Fetch with Customer populated and return directly
-			const result = await Ticket.findByPk(newTicket.id || newTicketId, {
+			const result = await Ticket.findByPk(newTicket.id, {
 				include: [{ model: Customer, as: "customer" }],
 			});
 
-			// Direct object return so frontend can read result.id without ambiguity
 			return res
 				.status(201)
 				.json(result ? result.toJSON() : newTicket.toJSON());

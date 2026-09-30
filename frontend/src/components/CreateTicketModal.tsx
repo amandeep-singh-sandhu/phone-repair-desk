@@ -488,12 +488,24 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 															Phone Number *
 														</label>
 														<input
+															type="tel"
 															placeholder="(555) 000-0000"
 															value={form.customerPhone}
+															maxLength={14} // (XXX) XXX-XXXX is exactly 14 characters
 															onBlur={() => markTouched("customerPhone")}
 															onChange={(e) => {
-																if (duplicateCustomer)
+																const digitsOnly = e.target.value.replace(
+																	/\D/g,
+																	"",
+																);
+
+																// Strict 10-digit cap: ignore further typing if exceeding 10 digits
+																if (digitsOnly.length > 10) return;
+
+																if (duplicateCustomer) {
 																	setDuplicateCustomer(null);
+																}
+
 																setForm({
 																	...form,
 																	customerPhone: formatPhoneNumber(
@@ -503,13 +515,19 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 															}}
 															className={`w-full text-sm rounded-xl px-3.5 py-2 bg-slate-950/80 border text-white placeholder-slate-600 outline-hidden transition-colors ${
 																touched.customerPhone && errors.customerPhone
-																	? "border-rose-500/80"
+																	? "border-rose-500/80 focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
 																	: "border-slate-800 focus:border-indigo-500"
 															}`}
 														/>
-														{touched.customerPhone && errors.customerPhone && (
-															<p className="text-[10px] text-rose-400 mt-1">
-																{errors.customerPhone}
+
+														{/* Error Message or Sub-label */}
+														{touched.customerPhone && errors.customerPhone ? (
+															<p className="text-[10px] text-rose-400 mt-1 font-medium flex items-center gap-1">
+																<span>•</span> {errors.customerPhone}
+															</p>
+														) : (
+															<p className="text-[10px] text-slate-500 mt-1">
+																Standard 10-digit US format: (555) 000-0000
 															</p>
 														)}
 													</div>

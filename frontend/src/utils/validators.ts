@@ -69,22 +69,15 @@ export const POPULAR_BRANDS: Record<string, string[]> = {
 	Motorola: ["Razr 50 Ultra", "Razr 40 Ultra", "Edge 50 Ultra", "Edge 50 Pro"],
 };
 
-// Formats phone numbers into standard readable format
+// Formats phone numbers strictly into standard US readable format: (XXX) XXX-XXXX
+// Caps input strictly at 10 digits to prevent UI overflow
 export function formatPhoneNumber(input: string): string {
-	let value = input.replace(/[^\d+]/g, "");
-	if (value.startsWith("+1")) {
-		const digits = value.slice(2).replace(/\D/g, "");
-		if (digits.length <= 3) return `+1 (${digits}`;
-		if (digits.length <= 6)
-			return `+1 (${digits.slice(0, 3)}) ${digits.slice(3)}`;
-		return `+1 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-	}
-	if (!value.startsWith("+") && value.length <= 10) {
-		if (value.length > 6)
-			return `(${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6, 10)}`;
-		if (value.length > 3) return `(${value.slice(0, 3)}) ${value.slice(3)}`;
-	}
-	return value;
+	const digits = input.replace(/\D/g, "").slice(0, 10);
+
+	if (digits.length === 0) return "";
+	if (digits.length < 4) return `(${digits}`;
+	if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+	return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 // Luhn Algorithm (Mod 10) for 15-digit IMEI or alphanumeric serials
@@ -140,8 +133,10 @@ export function validateTicketForm(
 		const phoneDigits = form.customerPhone.replace(/\D/g, "");
 		if (!phoneDigits) {
 			errs.customerPhone = "Phone number is required";
-		} else if (phoneDigits.length < 10 || phoneDigits.length > 15) {
-			errs.customerPhone = "Phone must be 10-15 digits";
+		} else if (phoneDigits.length < 10) {
+			errs.customerPhone = `Phone number must be exactly 10 digits (${phoneDigits.length}/10)`;
+		} else if (phoneDigits.length > 10) {
+			errs.customerPhone = "Phone number cannot exceed 10 digits";
 		} else if (/^(\d)\1+$/.test(phoneDigits)) {
 			errs.customerPhone = "Enter a valid phone number (not repeated digits)";
 		} else if (
