@@ -41,4 +41,51 @@ export const customerController = {
 			res.status(500).json({ error: err.message });
 		}
 	},
+
+	// GET /api/customers/check-exists?phone=...&name=...
+	checkCustomerExists: async (req: Request, res: Response) => {
+		try {
+			const phone =
+				typeof req.query.phone === "string" ? req.query.phone.trim() : "";
+			const name =
+				typeof req.query.name === "string" ? req.query.name.trim() : "";
+
+			if (!phone) {
+				return res.status(400).json({
+					error: "Validation Error",
+					detail: "Phone number is required to verify customer existence.",
+				});
+			}
+
+			// Match by phone, and optionally refine with name if provided
+			const whereClause: any = { phone };
+			if (name) {
+				whereClause.name = { [Op.iLike]: name };
+			}
+
+			const existingCustomer: any = await Customer.findOne({
+				where: whereClause,
+				include: [{ model: Ticket, as: "tickets", attributes: ["id"] }],
+			});
+
+			if (!existingCustomer) {
+				return res.json({ exists: false, customer: null });
+			}
+
+			return res.json({
+				exists: true,
+				customer: {
+					id: existingCustomer.id,
+					name: existingCustomer.name,
+					phone: existingCustomer.phone,
+					email: existingCustomer.email,
+					pastRepairsCount: existingCustomer.tickets
+						? existingCustomer.tickets.length
+						: 0,
+				},
+			});
+		} catch (err: any) {
+			res.status(500).json({ error: err.message });
+		}
+	},
 };

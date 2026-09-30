@@ -7,6 +7,7 @@ const router = Router();
 
 // Customers
 router.get("/customers", customerController.searchCustomers);
+router.get("/customers/check-exists", customerController.checkCustomerExists);
 
 // Tickets
 router.get("/tickets", ticketController.getAllTickets);

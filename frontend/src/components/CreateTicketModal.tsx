@@ -27,7 +27,8 @@ import {
 	BellRing,
 	FileText,
 	AlertCircle,
-	Loader2, // <-- Added for subtle search spinner
+	AlertTriangle,
+	Loader2,
 } from "lucide-react";
 
 interface ModalProps {
@@ -38,6 +39,14 @@ interface ModalProps {
 
 type TabType = "new" | "existing";
 type NotificationChannel = "sms" | "whatsapp" | "call";
+
+interface ExistingCustomerMatch {
+	id: string;
+	name: string;
+	phone: string;
+	email?: string;
+	pastRepairsCount?: number;
+}
 
 const initialForm: TicketFormData = {
 	customerName: "",
@@ -51,11 +60,20 @@ const initialForm: TicketFormData = {
 	priority: "medium",
 };
 
-export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSubmit }) => {
+export const CreateTicketModal: React.FC<ModalProps> = ({
+	isOpen,
+	onClose,
+	onSubmit,
+}) => {
 	const [step, setStep] = useState<1 | 2>(1);
 	const [customerTab, setCustomerTab] = useState<TabType>("new");
 	const [submitting, setSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState<string | null>(null);
+
+	// Duplicate verification state
+	const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+	const [duplicateCustomer, setDuplicateCustomer] =
+		useState<ExistingCustomerMatch | null>(null);
 
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchResults, setSearchResults] = useState<
@@ -139,6 +157,8 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 			setNotificationPref("whatsapp");
 			setTouched({});
 			setSubmitError(null);
+			setDuplicateCustomer(null);
+			setCheckingDuplicate(false);
 			setForm(initialForm);
 		}
 	}, [isOpen]);
@@ -157,7 +177,8 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 		}));
 	};
 
-	const handleGoToStep2 = () => {
+	// 🔍 Verify customer existence before stepping to hardware configuration
+	const handleGoToStep2 = async () => {
 		if (customerTab === "new") {
 			setTouched((prev) => ({
 				...prev,
@@ -165,10 +186,54 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 				customerPhone: true,
 				customerEmail: true,
 			}));
+
+			if (!isStep1Valid) return;
+
+			setCheckingDuplicate(true);
+			setDuplicateCustomer(null);
+			try {
+				const res = await repairApi.checkCustomerExists(
+					form.customerPhone.trim(),
+					form.customerName.trim(),
+				);
+
+				if (res?.exists && res.customer) {
+					setDuplicateCustomer(res.customer);
+					setCheckingDuplicate(false);
+					return;
+				}
+			} catch (err) {
+				console.error("Failed to verify customer existence:", err);
+			} finally {
+				setCheckingDuplicate(false);
+			}
 		}
+
 		if (isStep1Valid) {
 			setStep(2);
 		}
+	};
+
+	// Handle linking existing customer discovered via duplicate check
+	const handleUseExistingCustomer = (existing: ExistingCustomerMatch) => {
+		setSelectedCustomer({
+			id: existing.id,
+			name: existing.name,
+			phone: existing.phone,
+			email: existing.email || "",
+			createdAt: "",
+			pastRepairsCount: existing.pastRepairsCount || 0,
+		});
+
+		setForm((prev) => ({
+			...prev,
+			customerName: existing.name,
+			customerPhone: existing.phone,
+			customerEmail: existing.email || prev.customerEmail,
+		}));
+
+		setDuplicateCustomer(null);
+		setStep(2);
 	};
 
 	const handleFinalSubmit = async (e: React.FormEvent) => {
@@ -198,10 +263,7 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 				imeiOrSerial: form.imeiOrSerial.trim() || undefined,
 				issueDescription: form.issueDescription.trim(),
 				clientNotes: customerNotes.trim() || undefined,
-
-				// ⬇️ CHANGE THIS LINE: Do NOT copy client notes into diagnostic notes
 				diagnosticNotes: undefined,
-
 				notificationPreference: notificationPref,
 				estimatedCost: form.estimatedCost
 					? parseFloat(form.estimatedCost)
@@ -297,7 +359,10 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 										<div className="flex p-1 bg-slate-900/90 rounded-xl border border-slate-800 relative">
 											<button
 												type="button"
-												onClick={() => setCustomerTab("new")}
+												onClick={() => {
+													setCustomerTab("new");
+													setDuplicateCustomer(null);
+												}}
 												className={`relative z-10 flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors ${customerTab === "new" ? "text-white" : "text-slate-400 hover:text-slate-200"}`}
 											>
 												<UserPlus className="w-3.5 h-3.5" /> New Customer
@@ -310,7 +375,10 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 											</button>
 											<button
 												type="button"
-												onClick={() => setCustomerTab("existing")}
+												onClick={() => {
+													setCustomerTab("existing");
+													setDuplicateCustomer(null);
+												}}
 												className={`relative z-10 flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors ${customerTab === "existing" ? "text-white" : "text-slate-400 hover:text-slate-200"}`}
 											>
 												<Search className="w-3.5 h-3.5" /> Returning Client
@@ -322,6 +390,59 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 												)}
 											</button>
 										</div>
+
+										{/* DUPLICATE CUSTOMER INTERCEPTION ALERT */}
+										<AnimatePresence>
+											{duplicateCustomer && (
+												<motion.div
+													initial={{ opacity: 0, y: -6, scale: 0.98 }}
+													animate={{ opacity: 1, y: 0, scale: 1 }}
+													exit={{ opacity: 0, y: -6, scale: 0.98 }}
+													transition={{ duration: 0.2 }}
+													className="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/40 backdrop-blur-md shadow-lg"
+												>
+													<div className="flex items-start gap-2.5">
+														<div className="p-1 rounded-lg bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+															<AlertTriangle className="w-4 h-4" />
+														</div>
+														<div className="flex-1 min-w-0">
+															<div className="text-xs font-bold text-amber-200">
+																Customer Already Exists
+															</div>
+															<p className="text-[11px] text-amber-300/80 mt-0.5 leading-snug">
+																A profile for{" "}
+																<span className="text-white font-semibold">
+																	{duplicateCustomer.name}
+																</span>{" "}
+																with phone{" "}
+																<span className="text-white font-semibold">
+																	{duplicateCustomer.phone}
+																</span>{" "}
+																is already in your database.
+															</p>
+															<div className="flex items-center gap-2 mt-2.5">
+																<button
+																	type="button"
+																	onClick={() =>
+																		handleUseExistingCustomer(duplicateCustomer)
+																	}
+																	className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+																>
+																	Use Existing & Continue →
+																</button>
+																<button
+																	type="button"
+																	onClick={() => setDuplicateCustomer(null)}
+																	className="px-2.5 py-1 text-slate-400 hover:text-white text-xs rounded-lg transition-colors cursor-pointer"
+																>
+																	Edit Info
+																</button>
+															</div>
+														</div>
+													</div>
+												</motion.div>
+											)}
+										</AnimatePresence>
 
 										{/* NEW CUSTOMER SUB-VIEW */}
 										{customerTab === "new" ? (
@@ -344,12 +465,14 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 															placeholder="e.g. Alex Rivera"
 															value={form.customerName}
 															onBlur={() => markTouched("customerName")}
-															onChange={(e) =>
+															onChange={(e) => {
+																if (duplicateCustomer)
+																	setDuplicateCustomer(null);
 																setForm({
 																	...form,
 																	customerName: e.target.value,
-																})
-															}
+																});
+															}}
 															className={`w-full text-sm rounded-xl pl-10 pr-3.5 py-2 bg-slate-950/80 border text-white placeholder-slate-600 outline-hidden transition-colors ${
 																touched.customerName && errors.customerName
 																	? "border-rose-500/80 focus:border-rose-500"
@@ -368,14 +491,16 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 															placeholder="(555) 000-0000"
 															value={form.customerPhone}
 															onBlur={() => markTouched("customerPhone")}
-															onChange={(e) =>
+															onChange={(e) => {
+																if (duplicateCustomer)
+																	setDuplicateCustomer(null);
 																setForm({
 																	...form,
 																	customerPhone: formatPhoneNumber(
 																		e.target.value,
 																	),
-																})
-															}
+																});
+															}}
 															className={`w-full text-sm rounded-xl px-3.5 py-2 bg-slate-950/80 border text-white placeholder-slate-600 outline-hidden transition-colors ${
 																touched.customerPhone && errors.customerPhone
 																	? "border-rose-500/80"
@@ -787,11 +912,20 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 									whileHover={{ scale: 1.02 }}
 									whileTap={{ scale: 0.98 }}
 									type="button"
-									disabled={!isStep1Valid}
+									disabled={!isStep1Valid || checkingDuplicate}
 									onClick={handleGoToStep2}
 									className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 cursor-pointer transition-opacity"
 								>
-									Configure Hardware <ArrowRight className="w-3.5 h-3.5" />
+									{checkingDuplicate ? (
+										<>
+											<Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying
+											Client...
+										</>
+									) : (
+										<>
+											Configure Hardware <ArrowRight className="w-3.5 h-3.5" />
+										</>
+									)}
 								</motion.button>
 							) : (
 								<motion.button
@@ -817,4 +951,4 @@ export const CreateTicketModal: React.FC<ModalProps> = ({ isOpen, onClose, onSub
 			</div>
 		</div>
 	);
-};;
+};

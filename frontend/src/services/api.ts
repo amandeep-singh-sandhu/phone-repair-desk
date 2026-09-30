@@ -22,6 +22,16 @@ export const repairApi = {
 		return res.json();
 	},
 
+	checkCustomerExists: async (phone: string, name?: string) => {
+		const params = new URLSearchParams({ phone });
+		if (name) params.append("name", name);
+		const res = await fetch(
+			`${API_BASE_URL}/customers/check-exists?${params.toString()}`,
+		);
+		if (!res.ok) throw new Error("Failed to check customer existence");
+		return res.json();
+	},
+
 	// frontend/src/services/api.ts
 
 	createTicket: async (payload: CreateTicketPayload): Promise<Ticket> => {
