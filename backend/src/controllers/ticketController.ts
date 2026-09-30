@@ -298,6 +298,51 @@ export const ticketController = {
 		}
 	},
 
+	// GET /api/tickets/search?q=...
+	searchAllTickets: async (req: Request, res: Response) => {
+		try {
+			const q =
+				typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
+
+			// If no search query is provided, return recently completed/delivered tickets
+			if (!q) {
+				const recentDelivered = await Ticket.findAll({
+					where: { status: "delivered" },
+					include: [{ model: Customer, as: "customer" }],
+					order: [["updatedAt", "DESC"]],
+					limit: 4,
+				});
+				return res.json({ mode: "recent", tickets: recentDelivered });
+			}
+
+			// Search across all tickets (active + archived of all time)
+			const tickets = await Ticket.findAll({
+				where: {
+					[Op.or]: [
+						{ ticketNumber: { [Op.iLike]: `%${q}%` } },
+						{ deviceBrand: { [Op.iLike]: `%${q}%` } },
+						{ deviceModel: { [Op.iLike]: `%${q}%` } },
+						{ imeiOrSerial: { [Op.iLike]: `%${q}%` } },
+						{ issueDescription: { [Op.iLike]: `%${q}%` } },
+						{ "$customer.name$": { [Op.iLike]: `%${q}%` } },
+						{ "$customer.phone$": { [Op.iLike]: `%${q}%` } },
+					],
+				},
+				include: [{ model: Customer, as: "customer" }],
+				order: [["updatedAt", "DESC"]],
+				limit: 10,
+			});
+
+			return res.json({ mode: "search", tickets });
+		} catch (err: any) {
+			console.error("❌ Failed to search tickets:", err);
+			return res.status(500).json({
+				error: "Failed to search tickets",
+				detail: err.parent?.detail || err.message,
+			});
+		}
+	},
+
 	deleteTicket: async (req: Request, res: Response) => {
 		try {
 			const { id } = req.params;

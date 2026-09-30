@@ -47,8 +47,6 @@ export function App() {
 	};
 
 	// 2. Advance / Update status handler
-	// frontend/src/App.tsx
-
 	const handleUpdateStatus = async (
 		ticketId: string,
 		nextStatus: TicketStatus,
@@ -124,6 +122,7 @@ export function App() {
 	return (
 		<div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
 			<Navbar
+				onSelectTicket={(ticket) => setActiveTicket(ticket)}
 				onOpenCreate={() => setIsModalOpen(true)}
 				onRefresh={fetchTickets}
 				loading={loading}

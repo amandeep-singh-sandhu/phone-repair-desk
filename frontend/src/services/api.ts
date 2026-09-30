@@ -83,6 +83,16 @@ export const repairApi = {
 		return res.json();
 	},
 
+	searchTickets: async (
+		query: string,
+	): Promise<{ mode: "recent" | "search"; tickets: Ticket[] }> => {
+		const res = await fetch(
+			`${API_BASE_URL}/tickets/search?q=${encodeURIComponent(query)}`,
+		);
+		if (!res.ok) throw new Error("Failed to search tickets");
+		return res.json();
+	},
+
 	deleteTicket: async (ticketId: string): Promise<void> => {
 		const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}`, {
 			method: "DELETE",

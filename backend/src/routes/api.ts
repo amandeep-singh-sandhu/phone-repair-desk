@@ -14,6 +14,7 @@ router.get("/tickets", ticketController.getAllTickets);
 router.post("/tickets", ticketController.createTicket);
 router.patch("/tickets/:id/status", ticketController.updateStatus);
 router.get("/tickets/archived", ticketController.getArchivedTickets);
+router.get("/tickets/search", ticketController.searchAllTickets);
 router.delete("/tickets/:id", ticketController.deleteTicket); 
 
 export default router;

@@ -2,23 +2,28 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Wrench, Plus, RefreshCw } from "lucide-react";
+import { TicketSearchBar } from "./TicketSearchBar";
+import type { Ticket } from "../types";
 
 interface NavbarProps {
 	onOpenCreate: () => void;
 	onRefresh: () => void;
 	loading: boolean;
+	onSelectTicket: (ticket: Ticket) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
 	onOpenCreate,
 	onRefresh,
 	loading,
+	onSelectTicket,
 }) => {
 	return (
 		<header className="bg-[#090d18]/90 backdrop-blur-md border-b border-slate-800/80 text-white px-6 py-3.5 flex items-center justify-between sticky top-0 z-20">
 			{/* Top ambient indigo beam */}
 			<div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-indigo-500/40 to-transparent" />
 
+			{/* Left: Branding */}
 			<div className="flex items-center gap-3">
 				<motion.div
 					whileHover={{ rotate: 15 }}
@@ -37,6 +42,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 				</div>
 			</div>
 
+			{/* Center: Animated Search Bar */}
+			<div className="flex items-center justify-center flex-1 mx-4">
+				<TicketSearchBar onSelectTicket={onSelectTicket} />
+			</div>
+
+			{/* Right: Actions */}
 			<div className="flex items-center gap-3">
 				<motion.button
 					whileHover={{ scale: 1.05 }}
