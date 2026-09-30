@@ -13,6 +13,7 @@ router.get("/customers/check-exists", customerController.checkCustomerExists);
 router.get("/tickets", ticketController.getAllTickets);
 router.post("/tickets", ticketController.createTicket);
 router.patch("/tickets/:id/status", ticketController.updateStatus);
-router.delete("/tickets/:id", ticketController.deleteTicket); // <-- Added
+router.get("/tickets/archived", ticketController.getArchivedTickets);
+router.delete("/tickets/:id", ticketController.deleteTicket); 
 
 export default router;

@@ -23,6 +23,7 @@ import {
 	Check,
 	Edit3,
 	Trash2,
+	Lock,
 } from "lucide-react";
 
 interface DrawerProps {
@@ -49,18 +50,21 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 	const [isSavingNotes, setIsSavingNotes] = useState(false);
 	const [savedSuccess, setSavedSuccess] = useState(false);
 
+	// Check if ticket is in terminal state
+	const isDelivered = ticket?.status === "delivered";
+
 	useEscapeKey(onClose, isOpen);
 
-	// 1. Reset editing mode to FALSE whenever ticket changes
+	// Reset editing mode to FALSE whenever ticket changes
 	useEffect(() => {
 		if (ticket) {
 			setTechNotes(ticket.diagnosticNotes || "");
-			setIsEditingNotes(false); // <-- ALWAYS start in view/display mode
+			setIsEditingNotes(false);
 		}
 	}, [ticket?.id]);
 
 	const handleSaveNotes = async () => {
-		if (!ticket) return;
+		if (!ticket || isDelivered) return;
 		setIsSavingNotes(true);
 		try {
 			await onUpdateStatus(ticket.id, ticket.status, techNotes.trim());
@@ -78,7 +82,7 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 			e.preventDefault();
 		}
 
-		if (!ticket) return;
+		if (!ticket || isDelivered) return;
 		if (
 			!window.confirm("Are you sure you want to clear these technician notes?")
 		)
@@ -88,7 +92,7 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 		try {
 			await onUpdateStatus(ticket.id, ticket.status, "");
 			setTechNotes("");
-			setIsEditingNotes(false); // Keep closed
+			setIsEditingNotes(false);
 			setSavedSuccess(true);
 			setTimeout(() => setSavedSuccess(false), 2000);
 		} finally {
@@ -139,6 +143,13 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 										>
 											{ticket.priority}
 										</span>
+
+										{/* 🔒 Terminal Lock Badge in Header */}
+										{isDelivered && (
+											<span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+												<Lock className="w-2.5 h-2.5" /> Locked
+											</span>
+										)}
 									</div>
 									<h2 className="text-lg font-bold text-white mt-1.5">
 										{ticket.deviceBrand} {ticket.deviceModel}
@@ -148,9 +159,19 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 								{/* Header Controls */}
 								<div className="flex items-center gap-2">
 									{onDeleteTicket && (
-										<DeleteActionButton
-											onDelete={() => onDeleteTicket(ticket.id)}
-										/>
+										<div
+											className={
+												isDelivered
+													? "opacity-30 pointer-events-none cursor-not-allowed"
+													: ""
+											}
+										>
+											<DeleteActionButton
+												onDelete={() =>
+													!isDelivered && onDeleteTicket(ticket.id)
+												}
+											/>
+										</div>
 									)}
 
 									<motion.button
@@ -170,30 +191,50 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 							<div className="flex-1 overflow-y-auto p-6 space-y-6">
 								{/* Workflow Status Selector */}
 								<div>
-									<label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2.5 block">
-										Update Workflow Stage
-									</label>
+									<div className="flex items-center justify-between mb-2.5">
+										<label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+											Update Workflow Stage
+										</label>
+										{isDelivered && (
+											<span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+												<Lock className="w-3 h-3" /> Terminal / Read Only
+											</span>
+										)}
+									</div>
+
 									<div className="grid grid-cols-3 gap-2">
 										{WORKFLOW_STAGES.map((st) => {
 											const isActive = ticket.status === st.id;
 											return (
 												<motion.button
 													key={st.id}
-													whileHover={{ scale: 1.02 }}
-													whileTap={{ scale: 0.98 }}
+													whileHover={!isDelivered ? { scale: 1.02 } : {}}
+													whileTap={!isDelivered ? { scale: 0.98 } : {}}
 													type="button"
+													disabled={isDelivered}
 													onClick={() =>
+														!isDelivered &&
 														onUpdateStatus(ticket.id, st.id, techNotes)
 													}
-													className={`text-xs font-medium py-2.5 px-3 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${
-														isActive
-															? "border-indigo-500 bg-indigo-950/50 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.2)]"
-															: "border-slate-800 bg-slate-900/40 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+													className={`text-xs font-medium py-2.5 px-3 rounded-xl border text-left transition flex items-center justify-between ${
+														isActive && isDelivered
+															? "border-emerald-500/60 bg-emerald-950/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)] cursor-default"
+															: isActive
+																? "border-indigo-500 bg-indigo-950/50 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.2)] cursor-pointer"
+																: isDelivered
+																	? "border-slate-900 bg-slate-950/40 text-slate-600 opacity-40 cursor-not-allowed"
+																	: "border-slate-800 bg-slate-900/40 text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
 													}`}
 												>
 													<span>{st.badgeLabel}</span>
 													{isActive && (
-														<CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />
+														<CheckCircle2
+															className={`w-3.5 h-3.5 ${
+																isDelivered
+																	? "text-emerald-400"
+																	: "text-indigo-400"
+															}`}
+														/>
 													)}
 												</motion.button>
 											);
@@ -271,7 +312,6 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 								</div>
 
 								{/* Tech & Parts Log */}
-								{/* TECHNICIAN & PARTS NOTE (VIEW / EDIT / CLEAR TOGGLE) */}
 								<div className="bg-[#111827]/70 border border-slate-800/80 rounded-xl p-4 space-y-2.5">
 									<div className="flex items-center justify-between">
 										<h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
@@ -288,91 +328,87 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 											)}
 										</h3>
 
-										{/* Header Controls */}
-										<div className="flex items-center gap-2">
-											{savedSuccess && (
-												<span className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
-													<Check className="w-3.5 h-3.5" /> Updated
-												</span>
-											)}
+										{/* Header Controls - Hidden when delivered */}
+										{!isDelivered && (
+											<div className="flex items-center gap-2">
+												{savedSuccess && (
+													<span className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
+														<Check className="w-3.5 h-3.5" /> Updated
+													</span>
+												)}
 
-											{isEditingNotes ? (
-												<div className="flex items-center gap-1.5">
-													{/* Cancel button */}
-													<button
-														type="button"
-														onClick={() => {
-															setTechNotes(ticket.diagnosticNotes || "");
-															setIsEditingNotes(false);
-														}}
-														className="text-[11px] text-slate-400 hover:text-slate-200 px-2 py-1 rounded-lg transition cursor-pointer"
-													>
-														Cancel
-													</button>
+												{isEditingNotes ? (
+													<div className="flex items-center gap-1.5">
+														<button
+															type="button"
+															onClick={() => {
+																setTechNotes(ticket.diagnosticNotes || "");
+																setIsEditingNotes(false);
+															}}
+															className="text-[11px] text-slate-400 hover:text-slate-200 px-2 py-1 rounded-lg transition cursor-pointer"
+														>
+															Cancel
+														</button>
 
-													{/* Clear note if there was an existing note saved */}
-													{ticket.diagnosticNotes && (
+														{ticket.diagnosticNotes && (
+															<button
+																type="button"
+																disabled={isSavingNotes}
+																onClick={(e) => handleClearNotes(e)}
+																className="flex items-center gap-1 text-[11px] font-semibold text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+																title="Clear all technician notes"
+															>
+																<Trash2 className="w-3 h-3" /> Clear
+															</button>
+														)}
+
+														<button
+															type="button"
+															disabled={isSavingNotes || !techNotes.trim()}
+															onClick={handleSaveNotes}
+															className="flex items-center gap-1.5 text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 px-3 py-1.5 rounded-lg shadow-sm shadow-indigo-600/30 transition cursor-pointer"
+														>
+															<Save className="w-3.5 h-3.5" />{" "}
+															{isSavingNotes ? "Saving..." : "Save Note"}
+														</button>
+													</div>
+												) : ticket.diagnosticNotes ? (
+													<div className="flex items-center gap-1.5">
 														<button
 															type="button"
 															disabled={isSavingNotes}
-															onClick={(e) => handleClearNotes(e)}
+															onClick={handleClearNotes}
 															className="flex items-center gap-1 text-[11px] font-semibold text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
 															title="Clear all technician notes"
 														>
 															<Trash2 className="w-3 h-3" /> Clear
 														</button>
-													)}
 
-													{/* Save button */}
-													<button
-														type="button"
-														disabled={isSavingNotes || !techNotes.trim()}
-														onClick={handleSaveNotes}
-														className="flex items-center gap-1.5 text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 px-3 py-1.5 rounded-lg shadow-sm shadow-indigo-600/30 transition cursor-pointer"
-													>
-														<Save className="w-3.5 h-3.5" />{" "}
-														{isSavingNotes ? "Saving..." : "Save Note"}
-													</button>
-												</div>
-											) : ticket.diagnosticNotes ? (
-												<div className="flex items-center gap-1.5">
-													{/* Clear Button in reading view */}
-													<button
-														type="button"
-														disabled={isSavingNotes}
-														onClick={handleClearNotes}
-														className="flex items-center gap-1 text-[11px] font-semibold text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
-														title="Clear all technician notes"
-													>
-														<Trash2 className="w-3 h-3" /> Clear
-													</button>
-
-													{/* Edit Button */}
+														<button
+															type="button"
+															onClick={() => setIsEditingNotes(true)}
+															className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 hover:text-white bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+														>
+															<Edit3 className="w-3.5 h-3.5 text-indigo-400" />{" "}
+															Edit
+														</button>
+													</div>
+												) : (
 													<button
 														type="button"
 														onClick={() => setIsEditingNotes(true)}
-														className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 hover:text-white bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+														className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-300 hover:text-white bg-indigo-950/60 hover:bg-indigo-900/70 border border-indigo-800/50 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
 													>
 														<Edit3 className="w-3.5 h-3.5 text-indigo-400" />{" "}
-														Edit
+														Add Note
 													</button>
-												</div>
-											) : (
-												/* Add Note Button */
-												<button
-													type="button"
-													onClick={() => setIsEditingNotes(true)}
-													className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-300 hover:text-white bg-indigo-950/60 hover:bg-indigo-900/70 border border-indigo-800/50 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
-												>
-													<Edit3 className="w-3.5 h-3.5 text-indigo-400" /> Add
-													Note
-												</button>
-											)}
-										</div>
+												)}
+											</div>
+										)}
 									</div>
 
 									{/* Body */}
-									{isEditingNotes ? (
+									{isEditingNotes && !isDelivered ? (
 										<textarea
 											autoFocus
 											rows={3}
@@ -389,6 +425,12 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 										<p className="text-xs text-slate-200 leading-relaxed bg-slate-950/40 p-3 rounded-lg border border-slate-800/60 whitespace-pre-wrap">
 											{ticket.diagnosticNotes}
 										</p>
+									) : isDelivered ? (
+										<div className="p-4 rounded-xl border border-dashed border-slate-900 bg-slate-950/20 text-center">
+											<p className="text-xs text-slate-500 italic">
+												No technician notes recorded for this closed ticket.
+											</p>
+										</div>
 									) : (
 										<div
 											onClick={() => setIsEditingNotes(true)}
@@ -444,10 +486,18 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 							{/* Footer */}
 							<div className="p-4 border-t border-slate-800/80 bg-slate-950/50 flex justify-between items-center">
 								{onDeleteTicket ? (
-									<DeleteActionButton
-										variant="button"
-										onDelete={() => onDeleteTicket(ticket.id)}
-									/>
+									<div
+										className={
+											isDelivered
+												? "opacity-30 pointer-events-none cursor-not-allowed"
+												: ""
+										}
+									>
+										<DeleteActionButton
+											variant="button"
+											onDelete={() => !isDelivered && onDeleteTicket(ticket.id)}
+										/>
+									</div>
 								) : (
 									<div />
 								)}
@@ -466,4 +516,4 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 			)}
 		</AnimatePresence>
 	);
-};;;
+};

@@ -2,18 +2,48 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
 import { Customer, Ticket } from "../models";
+import { Op } from "sequelize";
 
 export const ticketController = {
 	getAllTickets: async (_req: Request, res: Response) => {
 		try {
+			// Calculate the 48-hour cutoff timestamp
+			const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
 			const tickets = await Ticket.findAll({
-				include: [{ model: Customer, as: "customer" }],
+				where: {
+					[Op.or]: [
+						// 1. All tickets that are in active/in-progress stages
+						{
+							status: {
+								[Op.ne]: "delivered",
+							},
+						},
+						// 2. Only show 'delivered' tickets completed within the last 48 hours
+						{
+							status: "delivered",
+							updatedAt: {
+								[Op.gte]: fortyEightHoursAgo,
+							},
+						},
+					],
+				},
+				include: [
+					{
+						model: Customer,
+						as: "customer",
+					},
+				],
 				order: [["createdAt", "DESC"]],
 			});
+
 			return res.json(tickets);
 		} catch (err: any) {
-			console.error("❌ getAllTickets error:", err);
-			return res.status(500).json({ error: err.message });
+			console.error("❌ Failed to fetch tickets:", err);
+			return res.status(500).json({
+				error: "Failed to fetch tickets",
+				detail: err.message,
+			});
 		}
 	},
 
@@ -134,57 +164,137 @@ export const ticketController = {
 		}
 	},
 
+	// updateStatus: async (req: Request, res: Response) => {
+	// 	try {
+	// 		const { id } = req.params;
+	// 		const { status, diagnosticNotes } = req.body;
+
+	// 		console.log(`🔄 Updating ticket ${id} to status: "${status}"`);
+
+	// 		const validStatuses = [
+	// 			"received",
+	// 			"diagnosing",
+	// 			"in_progress",
+	// 			"waiting_for_parts",
+	// 			"ready",
+	// 			"delivered",
+	// 		];
+
+	// 		if (!validStatuses.includes(status)) {
+	// 			console.error(`❌ Invalid status received: "${status}"`);
+	// 			return res.status(400).json({
+	// 				error: `Invalid status: "${status}". Must be one of: ${validStatuses.join(", ")}`,
+	// 			});
+	// 		}
+
+	// 		const ticketId = Array.isArray(id) ? id[0] : id;
+	// 		if (!ticketId) {
+	// 			return res.status(400).json({ error: "Ticket ID required" });
+	// 		}
+
+	// 		const ticket = await Ticket.findByPk(ticketId);
+	// 		if (!ticket) {
+	// 			return res.status(404).json({ error: "Ticket not found" });
+	// 		}
+
+	// 		if (status) ticket.status = status;
+	// 		if (diagnosticNotes !== undefined)
+	// 			ticket.diagnosticNotes = diagnosticNotes;
+
+	// 		await ticket.save();
+
+	// 		const updated = await Ticket.findByPk(ticketId, {
+	// 			include: [{ model: Customer, as: "customer" }],
+	// 		});
+
+	// 		console.log(`✅ Ticket ${ticketId} successfully moved to: ${status}`);
+	// 		return res.json(updated ? updated.toJSON() : ticket.toJSON());
+	// 	} catch (err: any) {
+	// 		console.error("❌ updateStatus error in DB:", err);
+	// 		return res.status(500).json({
+	// 			error: err.message,
+	// 			detail: err.parent?.detail || err.original?.message,
+	// 		});
+	// 	}
+	// },
+
 	updateStatus: async (req: Request, res: Response) => {
 		try {
 			const { id } = req.params;
 			const { status, diagnosticNotes } = req.body;
 
-			console.log(`🔄 Updating ticket ${id} to status: "${status}"`);
+			// Narrow down string | string[] to a single string for Sequelize
+			const ticketId = Array.isArray(id) ? id[0] : id;
 
-			const validStatuses = [
-				"received",
-				"diagnosing",
-				"in_progress",
-				"waiting_for_parts",
-				"ready",
-				"delivered",
-			];
-
-			if (!validStatuses.includes(status)) {
-				console.error(`❌ Invalid status received: "${status}"`);
+			if (!ticketId) {
 				return res.status(400).json({
-					error: `Invalid status: "${status}". Must be one of: ${validStatuses.join(", ")}`,
+					error: "Invalid Parameter",
+					detail: "A valid ticket ID is required.",
 				});
 			}
 
-			const ticketId = Array.isArray(id) ? id[0] : id;
-			if (!ticketId) {
-				return res.status(400).json({ error: "Ticket ID required" });
-			}
-
 			const ticket = await Ticket.findByPk(ticketId);
+
 			if (!ticket) {
-				return res.status(404).json({ error: "Ticket not found" });
+				return res.status(404).json({
+					error: "Ticket not found",
+					detail: `No ticket exists with ID: ${ticketId}`,
+				});
 			}
 
-			if (status) ticket.status = status;
-			if (diagnosticNotes !== undefined)
-				ticket.diagnosticNotes = diagnosticNotes;
-			
+			// Terminal State Guard: Once delivered, it cannot be modified or reverted
+			if (ticket.status === "delivered") {
+				return res.status(400).json({
+					error: "Ticket is Locked",
+					detail:
+						"Tickets marked as 'delivered' are archived and cannot be modified or reverted.",
+				});
+			}
+
+			// Update status and optional diagnostic notes
+			ticket.status = status;
+			if (diagnosticNotes !== undefined) {
+				ticket.diagnosticNotes = diagnosticNotes
+					? diagnosticNotes.trim()
+					: undefined;
+			}
+
 			await ticket.save();
 
-			const updated = await Ticket.findByPk(ticketId, {
+			// Reload ticket with customer populated to return the full payload
+			const updatedTicket = await Ticket.findByPk(ticketId, {
 				include: [{ model: Customer, as: "customer" }],
 			});
 
-			console.log(`✅ Ticket ${ticketId} successfully moved to: ${status}`);
-			return res.json(updated ? updated.toJSON() : ticket.toJSON());
+			return res.json(updatedTicket ? updatedTicket.toJSON() : ticket.toJSON());
 		} catch (err: any) {
-			console.error("❌ updateStatus error in DB:", err);
+			console.error("❌ Failed to update ticket status:", err);
 			return res.status(500).json({
-				error: err.message,
-				detail: err.parent?.detail || err.original?.message,
+				error: "Failed to update ticket status",
+				detail: err.parent?.detail || err.original?.message || err.message,
 			});
+		}
+	},
+
+	// GET /api/tickets/archived
+	getArchivedTickets: async (req: Request, res: Response) => {
+		try {
+			const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+			const archivedTickets = await Ticket.findAll({
+				where: {
+					status: "delivered",
+					updatedAt: {
+						[Op.lt]: fortyEightHoursAgo,
+					},
+				},
+				include: [{ model: Customer, as: "customer" }],
+				order: [["updatedAt", "DESC"]],
+			});
+
+			return res.json(archivedTickets);
+		} catch (err: any) {
+			return res.status(500).json({ error: err.message });
 		}
 	},
 
