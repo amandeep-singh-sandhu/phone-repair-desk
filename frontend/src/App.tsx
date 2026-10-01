@@ -17,7 +17,6 @@ export function App() {
 		setLoading(true);
 		try {
 			const data = await repairApi.getTickets();
-			// Filter out null/undefined entries to prevent Kanban crashes
 			const cleanData = Array.isArray(data)
 				? data.filter((t): t is Ticket => Boolean(t && t.id && t.status))
 				: [];
@@ -33,7 +32,6 @@ export function App() {
 		fetchTickets();
 	}, []);
 
-	// 1. Create ticket handler
 	const handleCreateTicket = async (ticketData: CreateTicketPayload) => {
 		try {
 			const createdTicket = await repairApi.createTicket(ticketData);
@@ -46,14 +44,12 @@ export function App() {
 		}
 	};
 
-	// 2. Advance / Update status handler
 	const handleUpdateStatus = async (
 		ticketId: string,
 		nextStatus: TicketStatus,
 		notes?: string,
 	) => {
 		try {
-			// 1. Optimistic UI update for board and drawer
 			setTickets((prev) =>
 				prev.map((t) =>
 					t && t.id === ticketId
@@ -76,14 +72,12 @@ export function App() {
 					: prev,
 			);
 
-			// 2. Persist to Postgres via Express
 			const updated = await repairApi.updateTicketStatus(
 				ticketId,
 				nextStatus,
 				notes,
 			);
 
-			// 3. Sync returned server state
 			if (updated && updated.id) {
 				setTickets((prev) =>
 					prev.map((t) => (t && t.id === ticketId ? updated : t)),
@@ -99,13 +93,11 @@ export function App() {
 		}
 	};
 
-	// 3. Delete ticket handler
 	const handleDeleteTicket = async (ticketId: string) => {
 		if (!window.confirm("Are you sure you want to delete this repair ticket?"))
 			return;
 
 		try {
-			// Optimistic remove and close drawer if active
 			setTickets((prev) => prev.filter((t) => t && t.id !== ticketId));
 			if (activeTicket?.id === ticketId) {
 				setActiveTicket(null);
@@ -120,7 +112,7 @@ export function App() {
 	};
 
 	return (
-		<div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
+		<div className="min-h-screen w-full bg-[#070b14] text-slate-100 flex flex-col font-sans overflow-x-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
 			<Navbar
 				onSelectTicket={(ticket) => setActiveTicket(ticket)}
 				onOpenCreate={() => setIsModalOpen(true)}
@@ -128,9 +120,10 @@ export function App() {
 				loading={loading}
 			/>
 
-			<main className="flex-1 overflow-x-auto">
+			<main className="flex-1 w-full max-w-full overflow-x-auto relative">
 				<KanbanBoard
 					tickets={tickets}
+					onTicketsReorder={(reordered) => setTickets(reordered)}
 					onStatusChange={handleUpdateStatus}
 					onDeleteTicket={handleDeleteTicket}
 					onSelectTicket={(ticket) => setActiveTicket(ticket)}
@@ -143,7 +136,6 @@ export function App() {
 				onSubmit={handleCreateTicket}
 			/>
 
-			{/* Drawer with active status sync and delete capability */}
 			<TicketDetailDrawer
 				isOpen={!!activeTicket}
 				ticket={activeTicket}

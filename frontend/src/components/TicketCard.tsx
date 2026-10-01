@@ -1,6 +1,5 @@
 // frontend/src/components/TicketCard.tsx
 import React from "react";
-import { motion } from "framer-motion";
 import type { Ticket, TicketStatus } from "../types";
 import { Smartphone, User, ArrowRight, Trash2, Lock } from "lucide-react";
 
@@ -37,24 +36,12 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 	};
 
 	return (
-		<motion.div
-			layoutId={ticket.id}
-			initial={{ opacity: 0, scale: 0.97 }}
-			animate={{ opacity: 1, scale: 1 }}
-			exit={{ opacity: 0, scale: 0.95 }}
-			whileHover={{ y: -2, zIndex: 10 }}
-			whileTap={{ scale: 0.98 }}
-			transition={{
-				type: "spring",
-				stiffness: 450,
-				damping: 32,
-				layout: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
-			}}
+		<div
 			onClick={() => onClick(ticket)}
-			className={`group relative rounded-xl p-4 shadow-md transition-colors duration-150 cursor-pointer flex flex-col justify-between gap-3 shrink-0 ${
+			className={`group relative rounded-xl p-4 shadow-md transition-all duration-150 flex flex-col justify-between gap-3 shrink-0 ${
 				isDelivered
-					? "bg-[#111827]/70 hover:bg-[#141d30] border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-emerald-500/5"
-					: "bg-[#131b2e] hover:bg-[#17223b] border border-slate-800/80 hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/10"
+					? "bg-[#111827]/70 hover:bg-[#141d30] border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-emerald-500/5 cursor-pointer"
+					: "bg-[#131b2e] hover:bg-[#17223b] border border-slate-800/80 hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/10 cursor-grab active:cursor-grabbing"
 			}`}
 		>
 			<div>
@@ -133,17 +120,17 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 				</div>
 
 				{nextStatus && (
-					<motion.button
-						whileTap={{ scale: 0.92 }}
+					<button
+						type="button"
 						onClick={(e) => {
 							e.stopPropagation();
 							onStatusChange(ticket.id, nextStatus);
 						}}
-						className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold text-[11px] px-2.5 py-1 rounded-md bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-800/40 transition cursor-pointer"
+						className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 active:scale-95 font-semibold text-[11px] px-2.5 py-1 rounded-md bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-800/40 transition cursor-pointer"
 					>
 						Advance{" "}
 						<ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-					</motion.button>
+					</button>
 				)}
 
 				{isDelivered && (
@@ -152,6 +139,6 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 					</span>
 				)}
 			</div>
-		</motion.div>
+		</div>
 	);
 };

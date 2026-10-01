@@ -11,7 +11,6 @@ import {
 	History,
 	Sparkles,
 	Loader2,
-	ArrowUpRight,
 } from "lucide-react";
 import { repairApi } from "../services/api";
 import type { Ticket } from "../types";
@@ -20,31 +19,44 @@ interface TicketSearchBarProps {
 	onSelectTicket: (ticket: Ticket) => void;
 }
 
-const containerVariants: Variants = {
-	hidden: { opacity: 0, y: 10, scale: 0.98 },
+// 🎯 Elastic Dropdown Pop
+const dropdownSpringVariants: Variants = {
+	hidden: {
+		opacity: 0,
+		y: -8,
+		scale: 0.95,
+	},
 	visible: {
 		opacity: 1,
 		y: 0,
-		scale: 1,
+		scale: [0.94, 1.03, 0.99, 1], // Bounces past bounds, then settles
 		transition: {
-			duration: 0.22,
-			ease: "easeOut",
-			staggerChildren: 0.04,
+			y: {
+				type: "spring",
+				stiffness: 340,
+				damping: 22,
+			},
+			scale: {
+				duration: 0.38,
+				ease: [0.22, 1.25, 0.36, 1],
+			},
+			opacity: { duration: 0.2 },
+			staggerChildren: 0.035,
 		},
 	},
 	exit: {
 		opacity: 0,
-		y: 8,
-		scale: 0.98,
-		transition: { duration: 0.15 },
+		y: -4,
+		scale: 0.96,
+		transition: { duration: 0.15, ease: "easeOut" },
 	},
 };
 
 const itemVariants: Variants = {
-	hidden: { opacity: 0, y: 6 },
+	hidden: { opacity: 0, x: -4 },
 	visible: {
 		opacity: 1,
-		y: 0,
+		x: 0,
 		transition: { duration: 0.16, ease: "easeOut" },
 	},
 };
@@ -61,7 +73,6 @@ export const TicketSearchBar: React.FC<TicketSearchBarProps> = ({
 	const containerRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	// Load recent completed orders on initial mount or when opening without query
 	const fetchTickets = async (searchTerm: string) => {
 		setLoading(true);
 		try {
@@ -76,7 +87,6 @@ export const TicketSearchBar: React.FC<TicketSearchBarProps> = ({
 		}
 	};
 
-	// Focus & Global Shortcuts
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -93,7 +103,6 @@ export const TicketSearchBar: React.FC<TicketSearchBarProps> = ({
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, []);
 
-	// Click outside listener
 	useEffect(() => {
 		const handleClickOutside = (e: MouseEvent) => {
 			if (
@@ -107,14 +116,11 @@ export const TicketSearchBar: React.FC<TicketSearchBarProps> = ({
 		return () => document.removeEventListener("mousedown", handleClickOutside);
 	}, []);
 
-	// Debounced backend search
 	useEffect(() => {
 		if (!isOpen) return;
-
 		const timer = setTimeout(() => {
 			fetchTickets(query);
 		}, 180);
-
 		return () => clearTimeout(timer);
 	}, [query, isOpen]);
 
@@ -125,17 +131,33 @@ export const TicketSearchBar: React.FC<TicketSearchBarProps> = ({
 	};
 
 	return (
-		<div ref={containerRef} className="relative z-30">
-			{/* Animated Expanding Input Pill */}
+		<div
+			ref={containerRef}
+			className="relative z-40 w-full max-w-[390px] flex justify-center"
+		>
+			{/* 🎯 Elastic Spring Input Capsule */}
 			<motion.div
 				animate={{
-					width: isOpen || query ? 390 : 240,
+					width: isOpen || query ? "100%" : "240px",
+					scale: isOpen ? [1, 1.025, 0.995, 1] : 1,
 					boxShadow: isOpen
-						? "0 0 25px -4px rgba(99, 102, 241, 0.45)"
+						? "0 0 25px -3px rgba(99, 102, 241, 0.45)"
 						: "0 0 0px rgba(0,0,0,0)",
 				}}
-				transition={{ type: "spring", stiffness: 380, damping: 30 }}
-				className={`relative flex items-center h-9 px-3 rounded-xl border transition-colors bg-[#090e1d]/90 backdrop-blur-md ${
+				transition={{
+					width: {
+						type: "spring",
+						stiffness: 300,
+						damping: 20, // Low damping provides the spring rebound
+						mass: 0.7,
+					},
+					scale: {
+						duration: 0.35,
+						ease: [0.22, 1.25, 0.36, 1],
+					},
+					boxShadow: { duration: 0.2 },
+				}}
+				className={`relative flex items-center h-9 px-3 rounded-xl border transition-colors bg-[#090e1d]/90 backdrop-blur-md will-change-transform ${
 					isOpen
 						? "border-indigo-500/90 ring-1 ring-indigo-500/40"
 						: "border-slate-800/90 hover:border-slate-700"
@@ -166,57 +188,52 @@ export const TicketSearchBar: React.FC<TicketSearchBarProps> = ({
 						if (!results.length) fetchTickets(query);
 					}}
 					onChange={(e) => setQuery(e.target.value)}
-					placeholder="Search active & archived repairs, clients, IMEI..."
-					className="w-full bg-transparent text-xs text-white placeholder-slate-500 outline-none pr-6"
+					placeholder="Search repairs, clients, IMEI..."
+					className="w-full min-w-0 bg-transparent text-xs text-white placeholder-slate-500 outline-none pr-2 truncate"
 				/>
 
 				{query ? (
-					<motion.button
-						whileHover={{ scale: 1.15 }}
-						whileTap={{ scale: 0.9 }}
+					<button
 						type="button"
 						onClick={() => {
 							setQuery("");
 							inputRef.current?.focus();
 						}}
-						className="p-1 text-slate-400 hover:text-white rounded-md transition-colors"
+						className="p-1 text-slate-400 hover:text-white rounded-md transition-colors shrink-0"
 					>
 						<X className="w-3.5 h-3.5" />
-					</motion.button>
+					</button>
 				) : (
-					<kbd className="hidden sm:inline-flex items-center gap-0.5 text-[9px] text-slate-500 font-mono border border-slate-800 rounded px-1.5 py-0.5 bg-slate-900/80">
+					<kbd className="hidden md:inline-flex items-center text-[9px] text-slate-500 font-mono border border-slate-800 rounded px-1.5 py-0.5 bg-slate-900/80 shrink-0">
 						⌘K
 					</kbd>
 				)}
 			</motion.div>
 
-			{/* Floating Animated Dropdown Shell */}
+			{/* Floating Dropdown */}
 			<AnimatePresence>
 				{isOpen && (
 					<motion.div
-						variants={containerVariants}
+						variants={dropdownSpringVariants}
 						initial="hidden"
 						animate="visible"
 						exit="exit"
-						className="absolute top-11 left-0 w-full min-w-97.5 bg-[#080c18]/95 border border-indigo-500/35 rounded-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2 overflow-hidden"
+						style={{ transformOrigin: "top center" }}
+						className="fixed sm:absolute top-14 sm:top-11 left-3 sm:left-1/2 sm:-translate-x-1/2 w-[calc(100vw-24px)] sm:w-[420px] max-w-[95vw] bg-[#080c18]/95 border border-indigo-500/35 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-2 overflow-hidden z-50 will-change-transform"
 					>
-						{/* Ambient Top Glow Line */}
-						<div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-indigo-400/50 to-transparent" />
+						<div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-indigo-400/50 to-transparent pointer-events-none" />
 
-						{/* Header Tag */}
 						<div className="px-2.5 py-1.5 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between border-b border-slate-800/60">
 							<div className="flex items-center gap-1.5">
 								{mode === "recent" ? (
 									<>
 										<History className="w-3 h-3 text-emerald-400" />
-										<span className="text-emerald-300">
-											Recent Order History (Delivered)
-										</span>
+										<span className="text-emerald-300">Recent Completed</span>
 									</>
 								) : (
 									<>
 										<Sparkles className="w-3 h-3 text-indigo-400" />
-										<span>All Database Results</span>
+										<span>Results</span>
 									</>
 								)}
 							</div>
@@ -225,9 +242,8 @@ export const TicketSearchBar: React.FC<TicketSearchBarProps> = ({
 							</span>
 						</div>
 
-						{/* Results List */}
 						{results.length > 0 ? (
-							<div className="space-y-1 max-h-85 overflow-y-auto pr-1">
+							<div className="space-y-1 max-h-80 sm:max-h-96 overflow-y-auto overflow-x-hidden pr-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
 								{results.map((ticket) => {
 									const isDelivered = ticket.status === "delivered";
 
@@ -235,77 +251,58 @@ export const TicketSearchBar: React.FC<TicketSearchBarProps> = ({
 										<motion.div
 											key={ticket.id}
 											variants={itemVariants}
-											onMouseDown={() => handleItemClick(ticket)}
-											className="p-2.5 rounded-xl border border-transparent hover:border-indigo-500/40 hover:bg-[#131b2e]/90 hover:translate-x-1 transition-all duration-150 ease-out cursor-pointer flex items-center justify-between group bg-slate-900/40 will-change-transform"
+											onClick={() => handleItemClick(ticket)}
+											className="p-2.5 rounded-xl border border-transparent hover:border-indigo-500/40 hover:bg-[#131b2e]/90 transition cursor-pointer flex items-center justify-between group bg-slate-900/40"
 										>
 											<div className="flex flex-col gap-1 min-w-0 pr-2">
 												<div className="flex items-center gap-2">
-													<span className="text-[11px] font-mono font-bold text-indigo-400 bg-indigo-950/70 px-1.5 py-0.5 rounded border border-indigo-800/50">
+													<span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/70 px-1.5 py-0.5 rounded border border-indigo-800/50 shrink-0">
 														{ticket.ticketNumber}
 													</span>
-													<span className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
+													<span className="text-xs font-semibold text-white truncate flex items-center gap-1">
 														<Smartphone className="w-3 h-3 text-slate-400 shrink-0" />
 														{ticket.deviceBrand} {ticket.deviceModel}
 													</span>
 												</div>
 
-												<div className="text-[11px] text-slate-400 flex items-center gap-2 truncate pl-0.5">
-													<span className="flex items-center gap-1 text-slate-300">
-														<User className="w-3 h-3 text-slate-500" />
+												<div className="text-[11px] text-slate-400 flex items-center gap-2 truncate">
+													<span className="flex items-center gap-1 text-slate-300 truncate">
+														<User className="w-3 h-3 text-slate-500 shrink-0" />
 														{ticket.customer?.name || "Walk-in"}
 													</span>
-													{ticket.customer?.phone && (
-														<>
-															<span className="text-slate-600">•</span>
-															<span className="font-mono text-slate-400">
-																{ticket.customer.phone}
-															</span>
-														</>
-													)}
 												</div>
 											</div>
 
-											{/* Right Side: Status Badge & Quote */}
 											<div className="flex flex-col items-end gap-1 shrink-0">
 												{isDelivered ? (
-													<span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs shadow-emerald-500/20">
+													<span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-full flex items-center gap-1">
 														<Lock className="w-2.5 h-2.5" /> Delivered
 													</span>
 												) : (
-													<span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-800/90 text-indigo-300 border border-slate-700/60">
+													<span className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-800/90 text-indigo-300 border border-slate-700/60">
 														{ticket.status.replace(/_/g, " ")}
 													</span>
 												)}
-
-												<div className="flex items-center gap-1 text-[11px] font-mono font-medium text-slate-400 group-hover:text-emerald-400 transition-colors">
-													{ticket.estimatedCost ? (
-														<span>
-															${Number(ticket.estimatedCost).toFixed(2)}
-														</span>
-													) : (
-														<span className="text-slate-600">No quote</span>
-													)}
-													<ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-												</div>
+												{ticket.estimatedCost ? (
+													<span className="text-[11px] font-mono text-slate-300">
+														${Number(ticket.estimatedCost).toFixed(2)}
+													</span>
+												) : null}
 											</div>
 										</motion.div>
 									);
 								})}
 							</div>
 						) : (
-							<motion.div
-								initial={{ opacity: 0 }}
-								animate={{ opacity: 1 }}
-								className="p-7 text-center space-y-1.5"
-							>
+							<div className="p-6 text-center space-y-1">
 								<p className="text-xs text-slate-300 font-medium">
-									No tickets or clients matched "
+									No matches for "
 									<span className="text-indigo-400">{query}</span>"
 								</p>
 								<p className="text-[11px] text-slate-500">
-									Try searching by IMEI, customer phone, or device model.
+									Search customer name, phone, or IMEI.
 								</p>
-							</motion.div>
+							</div>
 						)}
 					</motion.div>
 				)}

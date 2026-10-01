@@ -25,6 +25,7 @@ import {
 	Trash2,
 	Lock,
 } from "lucide-react";
+import type { Variants } from "framer-motion";
 
 interface DrawerProps {
 	ticket: Ticket | null;
@@ -37,6 +38,35 @@ interface DrawerProps {
 	) => Promise<void> | void;
 	onDeleteTicket?: (ticketId: string) => Promise<void> | void;
 }
+
+// 🎯 Elastic Rubber-Band Spring (Overshoots and snaps back)
+const bouncySpringVariants: Variants = {
+	closed: {
+		x: "100%",
+		scaleX: 0.96,
+		transition: {
+			type: "spring",
+			stiffness: 420,
+			damping: 38,
+		},
+	},
+	open: {
+		x: 0,
+		scaleX: [0.94, 1.035, 0.99, 1], // Stretches out past original size, then snaps back
+		transition: {
+			x: {
+				type: "spring",
+				stiffness: 280,
+				damping: 22, // Low damping lets it bounce past the screen edge
+				mass: 0.8,
+			},
+			scaleX: {
+				duration: 0.45,
+				ease: [0.22, 1.25, 0.36, 1], // Elastic overshoot bezier
+			},
+		},
+	},
+};
 
 export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 	ticket,
@@ -114,17 +144,19 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 						className="fixed inset-0 bg-black/75 backdrop-blur-xs cursor-pointer"
 					/>
 
-					{/* Slide Panel */}
+					{/* Slide Panel Container */}
 					<div className="fixed inset-y-0 right-0 flex max-w-full pointer-events-none">
 						<motion.div
-							initial={{ x: "100%" }}
-							animate={{ x: 0 }}
-							exit={{ x: "100%" }}
-							transition={{ type: "spring", damping: 30, stiffness: 300 }}
-							className="relative w-screen max-w-xl bg-[#0c1222] border-l border-indigo-500/30 flex flex-col justify-between pointer-events-auto shadow-[-25px_0_60px_-10px_rgba(99,102,241,0.35)]"
+							variants={bouncySpringVariants}
+							initial="closed"
+							animate="open"
+							exit="closed"
+							style={{ transformOrigin: "right center" }}
+							className="relative w-screen max-w-xl bg-[#0c1222] border-l border-indigo-500/30 flex flex-col justify-between pointer-events-auto shadow-[-25px_0_60px_-10px_rgba(99,102,241,0.35)] will-change-transform"
 						>
+							{/* Restored Ambient Left Glow Beam */}
 							<div
-								className="absolute inset-y-0 left-[-1.5px] w-0.5 bg-linear-to-b from-transparent via-indigo-400 to-transparent pointer-events-none z-30 shadow-[-6px_0_22px_2px_rgba(99,102,241,0.7)]"
+								className="absolute inset-y-0 left-[-1.5px] w-0.5 bg-gradient-to-b from-transparent via-indigo-400 to-transparent pointer-events-none z-30 shadow-[-6px_0_22px_2px_rgba(99,102,241,0.7)]"
 								aria-hidden="true"
 							/>
 
@@ -156,7 +188,7 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 									</h2>
 								</div>
 
-								{/* Header Controls */}
+								{/* Header Controls (Buttons as they originally were) */}
 								<div className="flex items-center gap-2">
 									{onDeleteTicket && (
 										<div
@@ -202,7 +234,7 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 										)}
 									</div>
 
-									<div className="grid grid-cols-3 gap-2">
+									<div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
 										{WORKFLOW_STAGES.map((st) => {
 											const isActive = ticket.status === st.id;
 											return (

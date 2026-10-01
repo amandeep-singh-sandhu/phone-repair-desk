@@ -295,7 +295,7 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 					animate={{ opacity: 1, scale: 1, y: 0 }}
 					exit={{ opacity: 0, scale: 0.96, y: 10 }}
 					transition={{ type: "spring", damping: 30, stiffness: 320 }}
-					className="w-full max-w-4xl min-h-145 md:h-145 bg-[#090d18] border border-indigo-500/35 rounded-3xl shadow-[0_0_70px_-12px_rgba(99,102,241,0.4)] overflow-hidden pointer-events-auto flex flex-col md:flex-row relative"
+					className="w-full max-w-4xl max-h-[92vh] sm:max-h-[85vh] bg-[#090d18] border border-indigo-500/35 rounded-2xl sm:rounded-3xl shadow-[0_0_70px_-12px_rgba(99,102,241,0.4)] overflow-y-auto sm:overflow-hidden pointer-events-auto flex flex-col md:flex-row relative"
 				>
 					<div className="absolute inset-x-0 top-0 h-[1.5px] bg-linear-to-r from-transparent via-indigo-400 to-transparent shadow-[0_0_15px_rgba(99,102,241,0.8)] z-30 pointer-events-none" />
 
