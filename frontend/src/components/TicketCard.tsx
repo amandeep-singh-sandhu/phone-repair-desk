@@ -2,6 +2,7 @@
 import React from "react";
 import type { Ticket, TicketStatus } from "../types";
 import { Smartphone, User, ArrowRight, Trash2, Lock } from "lucide-react";
+import { TechAvatarBadge } from "./common/TechAvatarBadge";
 
 interface TicketCardProps {
 	ticket: Ticket;
@@ -72,7 +73,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 							</button>
 						)}
 
-						{/* 🔒 Locked Pill in Header */}
+						{/* Terminal Lock Pill */}
 						{isDelivered && (
 							<span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
 								<Lock className="w-2.5 h-2.5" /> Locked
@@ -103,41 +104,49 @@ export const TicketCard: React.FC<TicketCardProps> = ({
 				</p>
 			</div>
 
-			{/* Footer: Customer Name, Estimated Quote, Advance/Locked Action */}
+			{/* Footer: Customer, Assigned Tech Badge, Quote & Advance */}
 			<div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-				<div className="flex flex-col gap-0.5">
+				<div className="flex flex-col gap-1.5 min-w-0">
 					<div className="flex items-center gap-1.5">
-						<User className="w-3.5 h-3.5 text-slate-500" />
+						<User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
 						<span className="truncate max-w-28 font-medium text-slate-300">
 							{ticket.customer?.name || "Walk-in Client"}
 						</span>
 					</div>
+
+					{/* Assigned Technician Badge */}
+					<div>
+						<TechAvatarBadge technician={ticket.assignedTechnician} size="sm" />
+					</div>
+				</div>
+
+				<div className="flex flex-col items-end gap-1.5 shrink-0">
 					{ticket.estimatedCost !== undefined && (
-						<span className="text-[11px] font-mono font-semibold text-emerald-400 pl-5">
+						<span className="text-[11px] font-mono font-semibold text-emerald-400">
 							${Number(ticket.estimatedCost).toFixed(2)}
 						</span>
 					)}
+
+					{nextStatus && (
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation();
+								onStatusChange(ticket.id, nextStatus);
+							}}
+							className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 active:scale-95 font-semibold text-[11px] px-2.5 py-1 rounded-md bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-800/40 transition cursor-pointer"
+						>
+							Advance{" "}
+							<ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+						</button>
+					)}
+
+					{isDelivered && (
+						<span className="flex items-center gap-1 text-[11px] font-medium text-emerald-400/90 bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+							<Lock className="w-2.5 h-2.5" /> Finalized
+						</span>
+					)}
 				</div>
-
-				{nextStatus && (
-					<button
-						type="button"
-						onClick={(e) => {
-							e.stopPropagation();
-							onStatusChange(ticket.id, nextStatus);
-						}}
-						className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 active:scale-95 font-semibold text-[11px] px-2.5 py-1 rounded-md bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-800/40 transition cursor-pointer"
-					>
-						Advance{" "}
-						<ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-					</button>
-				)}
-
-				{isDelivered && (
-					<span className="flex items-center gap-1 text-[11px] font-medium text-emerald-400/90 bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded-md">
-						<Lock className="w-2.5 h-2.5" /> Finalized
-					</span>
-				)}
 			</div>
 		</div>
 	);

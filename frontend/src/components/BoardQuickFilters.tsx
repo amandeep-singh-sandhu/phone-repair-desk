@@ -7,8 +7,9 @@ import {
 	User,
 	RotateCcw,
 	SlidersHorizontal,
+	UserX,
 } from "lucide-react";
-import type { PriorityLevel, Ticket } from "../types";
+import type { PriorityLevel, Ticket, Technician } from "../types";
 import {
 	FilterDropdownMenu,
 	type FilterOption,
@@ -22,6 +23,7 @@ export interface FilterState {
 
 interface BoardQuickFiltersProps {
 	tickets: Ticket[];
+	technicians: Technician[]; // 👈 Add technicians prop
 	filters: FilterState;
 	onFilterChange: (filters: FilterState) => void;
 	totalTicketsCount: number;
@@ -30,12 +32,13 @@ interface BoardQuickFiltersProps {
 
 export const BoardQuickFilters: React.FC<BoardQuickFiltersProps> = ({
 	tickets,
+	technicians,
 	filters,
 	onFilterChange,
 	totalTicketsCount,
 	matchingTicketsCount,
 }) => {
-	// 1. Faceted Tickets for Priority: Filter by active brand/technician first
+	// Base filtered pool considering active filters other than Priority
 	const ticketsForPriorityCounts = useMemo(() => {
 		return tickets.filter((t) => {
 			if (
@@ -44,11 +47,18 @@ export const BoardQuickFilters: React.FC<BoardQuickFiltersProps> = ({
 			) {
 				return false;
 			}
+			if (filters.technicians.length > 0) {
+				const hasUnassigned = filters.technicians.includes("unassigned");
+				const techId = t.assignedTechnicianId || t.assignedTechnician?.id;
+				const matchesTech = techId && filters.technicians.includes(techId);
+				const matchesUnassigned = hasUnassigned && !techId;
+				if (!matchesTech && !matchesUnassigned) return false;
+			}
 			return true;
 		});
-	}, [tickets, filters.brands]);
+	}, [tickets, filters.brands, filters.technicians]);
 
-	// 2. Faceted Tickets for Brands: Filter by active priority first
+	// Base filtered pool considering active filters other than Brand
 	const ticketsForBrandCounts = useMemo(() => {
 		return tickets.filter((t) => {
 			if (
@@ -57,38 +67,57 @@ export const BoardQuickFilters: React.FC<BoardQuickFiltersProps> = ({
 			) {
 				return false;
 			}
+			if (filters.technicians.length > 0) {
+				const hasUnassigned = filters.technicians.includes("unassigned");
+				const techId = t.assignedTechnicianId || t.assignedTechnician?.id;
+				const matchesTech = techId && filters.technicians.includes(techId);
+				const matchesUnassigned = hasUnassigned && !techId;
+				if (!matchesTech && !matchesUnassigned) return false;
+			}
 			return true;
 		});
-	}, [tickets, filters.priorities]);
+	}, [tickets, filters.priorities, filters.technicians]);
 
-	// 3. Dynamic Brands with contextual counts
+	// Base filtered pool considering active filters other than Technician
+	const ticketsForTechCounts = useMemo(() => {
+		return tickets.filter((t) => {
+			if (
+				filters.priorities.length > 0 &&
+				!filters.priorities.includes(t.priority)
+			) {
+				return false;
+			}
+			if (
+				filters.brands.length > 0 &&
+				!filters.brands.includes(t.deviceBrand?.trim())
+			) {
+				return false;
+			}
+			return true;
+		});
+	}, [tickets, filters.priorities, filters.brands]);
+
+	// 1. Dynamic Brands
 	const brandOptions: FilterOption[] = useMemo(() => {
-		// Discover all unique brands present in the store
 		const allBrands = Array.from(
 			new Set(tickets.map((t) => t.deviceBrand?.trim()).filter(Boolean)),
 		).sort();
 
-		return allBrands.map((brand) => {
-			// Count how many match the current priority selection
-			const count = ticketsForBrandCounts.filter(
+		return allBrands.map((brand) => ({
+			id: brand,
+			label: brand,
+			count: ticketsForBrandCounts.filter(
 				(t) => t.deviceBrand?.trim() === brand,
-			).length;
-
-			return {
-				id: brand,
-				label: brand,
-				count,
-			};
-		});
+			).length,
+		}));
 	}, [tickets, ticketsForBrandCounts]);
 
-	// 4. Priority Options with contextual counts
+	// 2. Priority Options
 	const priorityOptions: FilterOption[] = useMemo(() => {
 		const list: PriorityLevel[] = ["urgent", "high", "medium", "low"];
 		return list.map((p) => ({
 			id: p,
 			label: p.charAt(0).toUpperCase() + p.slice(1),
-			// Contextual count reflecting only the currently selected brand
 			count: ticketsForPriorityCounts.filter((t) => t.priority === p).length,
 			icon: (
 				<span
@@ -106,16 +135,48 @@ export const BoardQuickFilters: React.FC<BoardQuickFiltersProps> = ({
 		}));
 	}, [ticketsForPriorityCounts]);
 
-	// 5. Clean Technician Options (Placeholder names removed)
+	// 3. Dynamic Technician Options (Unassigned + All Active Technicians)
 	const technicianOptions: FilterOption[] = useMemo(() => {
-		return [
+		const unassignedCount = ticketsForTechCounts.filter(
+			(t) => !t.assignedTechnicianId && !t.assignedTechnician,
+		).length;
+
+		const options: FilterOption[] = [
 			{
 				id: "unassigned",
 				label: "Unassigned",
-				count: matchingTicketsCount,
+				count: unassignedCount,
+				icon: <UserX className="w-3.5 h-3.5 text-slate-400" />,
 			},
 		];
-	}, [matchingTicketsCount]);
+
+		(technicians || []).forEach((tech) => {
+			const count = ticketsForTechCounts.filter(
+				(t) =>
+					t.assignedTechnicianId === tech.id ||
+					t.assignedTechnician?.id === tech.id,
+			).length;
+
+			options.push({
+				id: tech.id,
+				label: tech.name,
+				count,
+				icon: (
+					<span
+						style={{ backgroundColor: tech.avatarColor || "#6366f1" }}
+						className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white font-mono shrink-0"
+					>
+						{tech.name
+							.split(" ")
+							.map((n) => n[0])
+							.join("")}
+					</span>
+				),
+			});
+		});
+
+		return options;
+	}, [technicians, ticketsForTechCounts]);
 
 	const hasActiveFilters =
 		filters.priorities.length > 0 ||
@@ -132,14 +193,13 @@ export const BoardQuickFilters: React.FC<BoardQuickFiltersProps> = ({
 
 	return (
 		<div className="relative z-20 w-full px-4 sm:px-6 py-2.5 flex items-center justify-between border-b border-slate-800/60 bg-[#080d19]/80 backdrop-blur-md">
-			{/* Left: Filter Controls */}
+			{/* Filter Controls */}
 			<div className="flex flex-wrap items-center gap-2">
 				<div className="flex items-center gap-1.5 text-slate-400 text-xs font-semibold mr-1 shrink-0">
 					<SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
 					<span className="hidden sm:inline">Filter By:</span>
 				</div>
 
-				{/* Priority Dropdown */}
 				<FilterDropdownMenu
 					title="Priority"
 					icon={<Zap className="w-3.5 h-3.5" />}
@@ -153,7 +213,6 @@ export const BoardQuickFilters: React.FC<BoardQuickFiltersProps> = ({
 					}
 				/>
 
-				{/* Device Brand Dropdown with built-in search */}
 				<FilterDropdownMenu
 					title="Device Brand"
 					icon={<Smartphone className="w-3.5 h-3.5" />}
@@ -165,19 +224,17 @@ export const BoardQuickFilters: React.FC<BoardQuickFiltersProps> = ({
 					}
 				/>
 
-				{/* Technician Dropdown (Cleaned of mock names) */}
 				<FilterDropdownMenu
 					title="Technician"
 					icon={<User className="w-3.5 h-3.5" />}
 					options={technicianOptions}
 					selectedIds={filters.technicians}
-					searchable={false}
+					searchable={technicians.length > 5}
 					onChange={(selected) =>
 						onFilterChange({ ...filters, technicians: selected })
 					}
 				/>
 
-				{/* Reset Button */}
 				<AnimatePresence>
 					{hasActiveFilters && (
 						<motion.button
@@ -196,7 +253,7 @@ export const BoardQuickFilters: React.FC<BoardQuickFiltersProps> = ({
 				</AnimatePresence>
 			</div>
 
-			{/* Right: Board Match Counter */}
+			{/* Match Counter */}
 			<div className="hidden md:flex items-center gap-2 text-xs text-slate-400 shrink-0">
 				<span>Showing</span>
 				<span className="font-mono font-semibold text-indigo-400 bg-indigo-950/60 border border-indigo-800/40 px-2 py-0.5 rounded-md">

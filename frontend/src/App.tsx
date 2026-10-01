@@ -9,7 +9,7 @@ import {
 import { CreateTicketModal } from "./components/CreateTicketModal";
 import { TicketDetailDrawer } from "./components/TicketDetailDrawer";
 import { repairApi } from "./services/api";
-import type { Ticket, TicketStatus, CreateTicketPayload } from "./types";
+import type { Ticket, TicketStatus, CreateTicketPayload, Technician } from "./types";
 
 export function App() {
 	const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -17,38 +17,10 @@ export function App() {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
 
-	// 🔍 Quick Filter State
-	// 1. Update filter state initialization:
-	const [filters, setFilters] = useState<FilterState>({
-		priorities: [],
-		brands: [],
-		technicians: [],
-	});
+	// 1. Add technicians state
+	const [technicians, setTechnicians] = useState<Technician[]>([]);
 
-	// 2. Update displayedTickets useMemo to include technician filtering:
-	const displayedTickets = useMemo(() => {
-		return tickets.filter((ticket) => {
-			if (
-				filters.priorities.length > 0 &&
-				!filters.priorities.includes(ticket.priority)
-			) {
-				return false;
-			}
-			if (
-				filters.brands.length > 0 &&
-				!filters.brands.includes(ticket.deviceBrand?.trim())
-			) {
-				return false;
-			}
-			// If technician filter is used (e.g. unassigned)
-			if (filters.technicians.includes("unassigned")) {
-				// All current tickets are unassigned
-				return true;
-			}
-			return true;
-		});
-	}, [tickets, filters]);
-
+	// 2. Fetch both tickets and technicians on boot
 	const fetchTickets = async () => {
 		setLoading(true);
 		try {
@@ -64,9 +36,110 @@ export function App() {
 		}
 	};
 
+	const fetchTechnicians = async () => {
+		try {
+			const techs = await repairApi.getTechnicians();
+			setTechnicians(Array.isArray(techs) ? techs : []);
+		} catch (err) {
+			console.error("Failed to load technicians", err);
+		}
+	};
+
 	useEffect(() => {
 		fetchTickets();
+		fetchTechnicians();
 	}, []);
+
+	// 3. Define handleAssignTechnician
+	const handleAssignTechnician = async (
+		ticketId: string,
+		technicianId: string | null,
+	) => {
+		// Optimistic UI update
+		const targetTech = technicians.find((t) => t.id === technicianId) || null;
+
+		setTickets((prev) =>
+			prev.map((t) =>
+				t.id === ticketId
+					? {
+							...t,
+							assignedTechnicianId: technicianId,
+							assignedTechnician: targetTech,
+						}
+					: t,
+			),
+		);
+
+		setActiveTicket((prev) =>
+			prev && prev.id === ticketId
+				? {
+						...prev,
+						assignedTechnicianId: technicianId,
+						assignedTechnician: targetTech,
+					}
+				: prev,
+		);
+
+		try {
+			const updated = await repairApi.assignTechnician(ticketId, technicianId);
+			if (updated && updated.id) {
+				setTickets((prev) =>
+					prev.map((t) => (t.id === ticketId ? updated : t)),
+				);
+				setActiveTicket((prev) => (prev?.id === ticketId ? updated : prev));
+			}
+		} catch (err) {
+			console.error("Failed to persist technician assignment:", err);
+			fetchTickets(); // Rollback on error
+		}
+	};
+
+	// 🔍 Quick Filter State
+	// 1. Update filter state initialization:
+	const [filters, setFilters] = useState<FilterState>({
+		priorities: [],
+		brands: [],
+		technicians: [],
+	});
+
+	// 2. Update displayedTickets useMemo to include technician filtering:
+	const displayedTickets = useMemo(() => {
+		return tickets.filter((ticket) => {
+			// Priority filter
+			if (
+				filters.priorities.length > 0 &&
+				!filters.priorities.includes(ticket.priority)
+			) {
+				return false;
+			}
+
+			// Brand filter
+			if (
+				filters.brands.length > 0 &&
+				!filters.brands.includes(ticket.deviceBrand?.trim())
+			) {
+				return false;
+			}
+
+			// Technician filter
+			if (filters.technicians.length > 0) {
+				const hasUnassigned = filters.technicians.includes("unassigned");
+				const techId =
+					ticket.assignedTechnicianId || ticket.assignedTechnician?.id;
+
+				const matchesSelectedTech = Boolean(
+					techId && filters.technicians.includes(techId),
+				);
+				const matchesUnassigned = Boolean(hasUnassigned && !techId);
+
+				if (!matchesSelectedTech && !matchesUnassigned) {
+					return false;
+				}
+			}
+
+			return true;
+		});
+	}, [tickets, filters]);
 
 	const handleCreateTicket = async (ticketData: CreateTicketPayload) => {
 		try {
@@ -159,6 +232,7 @@ export function App() {
 			{/* 🎛 Quick Filter Bar */}
 			<BoardQuickFilters
 				tickets={tickets}
+				technicians={technicians} // 👈 Pass technicians here
 				filters={filters}
 				onFilterChange={setFilters}
 				totalTicketsCount={tickets.length}
@@ -183,10 +257,15 @@ export function App() {
 
 			<TicketDetailDrawer
 				isOpen={!!activeTicket}
-				ticket={activeTicket}
+				ticket={
+					// Reads freshest assignedTechnician data directly from state
+					tickets.find((t) => t.id === activeTicket?.id) || activeTicket
+				}
 				onClose={() => setActiveTicket(null)}
 				onUpdateStatus={handleUpdateStatus}
 				onDeleteTicket={handleDeleteTicket}
+				technicians={technicians}
+				onAssignTechnician={handleAssignTechnician}
 			/>
 		</div>
 	);

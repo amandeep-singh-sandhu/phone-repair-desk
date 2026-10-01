@@ -9,6 +9,8 @@ export type TicketStatus =
 
 export type PriorityLevel = "low" | "medium" | "high" | "urgent";
 
+export type UserRole = "admin" | "technician" | "front_desk";
+
 export interface Customer {
 	id: string;
 	name: string;
@@ -17,11 +19,22 @@ export interface Customer {
 	createdAt: string;
 }
 
+// Add the Technician interface:
+export interface Technician {
+	id: string;
+	name: string;
+	email: string;
+	role: UserRole;
+	avatarColor: string;
+}
+
 export interface Ticket {
 	id: string;
 	ticketNumber: string;
 	customerId: string;
 	customer?: Customer;
+	assignedTechnicianId?: string | null;
+	assignedTechnician?: Technician | null; // Associated technician object
 	deviceBrand: string;
 	deviceModel: string;
 	imeiOrSerial?: string;

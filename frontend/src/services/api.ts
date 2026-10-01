@@ -1,5 +1,5 @@
 // frontend/src/services/api.ts
-import type { Ticket, CreateTicketPayload, TicketStatus, Customer } from "../types";
+import type { Ticket, CreateTicketPayload, TicketStatus, Customer, Technician } from "../types";
 
 const API_BASE_URL = "http://localhost:5000/api";
 
@@ -10,6 +10,30 @@ export const repairApi = {
 		const data = await res.json();
 		// Guard against any null items from DB
 		return Array.isArray(data) ? data.filter(Boolean) : [];
+	},
+
+	getTechnicians: async (): Promise<Technician[]> => {
+		const res = await fetch(`${API_BASE_URL}/technicians`);
+		if (!res.ok) throw new Error("Failed to fetch technicians");
+		return res.json();
+	},
+
+	assignTechnician: async (
+		ticketId: string,
+		technicianId: string | null,
+	): Promise<Ticket> => {
+		const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}/assign`, {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ technicianId }),
+		});
+
+		if (!res.ok) {
+			const errorData = await res.json().catch(() => ({}));
+			throw new Error(errorData.error || "Failed to assign technician");
+		}
+
+		return res.json();
 	},
 
 	searchCustomers: async (

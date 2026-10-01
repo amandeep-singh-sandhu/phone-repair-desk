@@ -3,6 +3,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { sequelize } from "./config/database";
+import { User } from "./models/index.js";
 import "./models/index.js";
 import apiRoutes from "./routes/api.js";
 
@@ -35,6 +36,41 @@ app.get("/api/health", async (_req: Request, res: Response) => {
 	}
 });
 
+// Seed default technicians if table is empty
+async function seedTechnicians() {
+	try {
+		const count = await User.count({ where: { role: "technician" } });
+		if (count === 0) {
+			await User.bulkCreate([
+				{
+					name: "Marcus Vance",
+					email: "marcus@fixdesk.internal",
+					role: "technician",
+					avatarColor: "#8b5cf6",
+					isActive: true,
+				},
+				{
+					name: "Elena Rostova",
+					email: "elena@fixdesk.internal",
+					role: "technician",
+					avatarColor: "#ec4899",
+					isActive: true,
+				},
+				{
+					name: "Devon Miles",
+					email: "devon@fixdesk.internal",
+					role: "technician",
+					avatarColor: "#06b6d4",
+					isActive: true,
+				},
+			]);
+			console.log("✅ Seeded initial technicians into PostgreSQL.");
+		}
+	} catch (seedErr) {
+		console.error("⚠️ Technician seeding error:", seedErr);
+	}
+}
+
 // Start Server & Sync Database
 const start = async () => {
 	try {
@@ -44,6 +80,9 @@ const start = async () => {
 		// Automatically syncs models with PostgreSQL tables
 		await sequelize.sync({ alter: true });
 		console.log("Database models synchronized.");
+
+		// Seed initial technicians
+		await seedTechnicians();
 
 		app.listen(PORT, () => {
 			console.log(`Backend server running on http://localhost:${PORT}`);

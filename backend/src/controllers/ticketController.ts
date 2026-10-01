@@ -1,52 +1,65 @@
 // backend/src/controllers/ticketController.ts
 import { Request, Response } from "express";
 import crypto from "crypto";
-import { Customer, Ticket } from "../models";
+import { Customer, Ticket, User } from "../models";
 import { Op } from "sequelize";
 
 export const ticketController = {
 	getAllTickets: async (_req: Request, res: Response) => {
 		try {
-			// Calculate the 48-hour cutoff timestamp
-			const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-
 			const tickets = await Ticket.findAll({
-				where: {
-					[Op.or]: [
-						// 1. All tickets that are in active/in-progress stages
-						{
-							status: {
-								[Op.ne]: "delivered",
-							},
-						},
-						// 2. Only show 'delivered' tickets completed within the last 48 hours
-						{
-							status: "delivered",
-							updatedAt: {
-								[Op.gte]: fortyEightHoursAgo,
-							},
-						},
-					],
-				},
 				include: [
+					{ model: Customer, as: "customer" },
 					{
-						model: Customer,
-						as: "customer",
+						model: User,
+						as: "assignedTechnician",
+						attributes: ["id", "name", "email", "role", "avatarColor"],
 					},
 				],
 				order: [["createdAt", "DESC"]],
 			});
-
-			return res.json(tickets);
-		} catch (err: any) {
-			console.error("❌ Failed to fetch tickets:", err);
-			return res.status(500).json({
-				error: "Failed to fetch tickets",
-				detail: err.message,
-			});
+			res.json(tickets);
+		} catch (error: any) {
+			console.error("Failed to fetch tickets:", error);
+			res
+				.status(500)
+				.json({ error: error.message || "Failed to fetch tickets" });
 		}
 	},
 
+	assignTechnician: async (req: Request, res: Response) => {
+		try {
+			const id = req.params.id as string;
+			const { technicianId } = req.body; // string UUID or null
+
+			const ticket = await Ticket.findByPk(id);
+			if (!ticket) {
+				return res.status(404).json({ error: "Ticket not found" });
+			}
+
+			ticket.assignedTechnicianId = technicianId || null;
+			await ticket.save();
+
+			// Reload ticket with customer and assigned technician associations
+			const updatedTicket = await Ticket.findByPk(id, {
+				include: [
+					{ model: Customer, as: "customer" },
+					{
+						model: User,
+						as: "assignedTechnician",
+						attributes: ["id", "name", "email", "role", "avatarColor"],
+					},
+				],
+			});
+
+			res.json(updatedTicket);
+		} catch (error: any) {
+			console.error("Failed to assign technician:", error);
+			res
+				.status(500)
+				.json({ error: error.message || "Failed to assign technician" });
+		}
+	},
 	// backend/src/controllers/ticketController.ts
 
 	createTicket: async (req: Request, res: Response) => {
@@ -157,60 +170,6 @@ export const ticketController = {
 			});
 		}
 	},
-
-	// updateStatus: async (req: Request, res: Response) => {
-	// 	try {
-	// 		const { id } = req.params;
-	// 		const { status, diagnosticNotes } = req.body;
-
-	// 		console.log(`🔄 Updating ticket ${id} to status: "${status}"`);
-
-	// 		const validStatuses = [
-	// 			"received",
-	// 			"diagnosing",
-	// 			"in_progress",
-	// 			"waiting_for_parts",
-	// 			"ready",
-	// 			"delivered",
-	// 		];
-
-	// 		if (!validStatuses.includes(status)) {
-	// 			console.error(`❌ Invalid status received: "${status}"`);
-	// 			return res.status(400).json({
-	// 				error: `Invalid status: "${status}". Must be one of: ${validStatuses.join(", ")}`,
-	// 			});
-	// 		}
-
-	// 		const ticketId = Array.isArray(id) ? id[0] : id;
-	// 		if (!ticketId) {
-	// 			return res.status(400).json({ error: "Ticket ID required" });
-	// 		}
-
-	// 		const ticket = await Ticket.findByPk(ticketId);
-	// 		if (!ticket) {
-	// 			return res.status(404).json({ error: "Ticket not found" });
-	// 		}
-
-	// 		if (status) ticket.status = status;
-	// 		if (diagnosticNotes !== undefined)
-	// 			ticket.diagnosticNotes = diagnosticNotes;
-
-	// 		await ticket.save();
-
-	// 		const updated = await Ticket.findByPk(ticketId, {
-	// 			include: [{ model: Customer, as: "customer" }],
-	// 		});
-
-	// 		console.log(`✅ Ticket ${ticketId} successfully moved to: ${status}`);
-	// 		return res.json(updated ? updated.toJSON() : ticket.toJSON());
-	// 	} catch (err: any) {
-	// 		console.error("❌ updateStatus error in DB:", err);
-	// 		return res.status(500).json({
-	// 			error: err.message,
-	// 			detail: err.parent?.detail || err.original?.message,
-	// 		});
-	// 	}
-	// },
 
 	updateStatus: async (req: Request, res: Response) => {
 		try {

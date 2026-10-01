@@ -1,7 +1,7 @@
 // frontend/src/components/TicketDetailDrawer.tsx
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Ticket, TicketStatus } from "../types";
+import type { Ticket, TicketStatus, Technician } from "../types";
 import { WORKFLOW_STAGES, PRIORITY_STYLES } from "../constants/workflow";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { DeleteActionButton } from "./common/DeleteActionButton";
@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 
+// 1. Add props for technicians and assignment handler:
 interface DrawerProps {
 	ticket: Ticket | null;
 	isOpen: boolean;
@@ -36,6 +37,11 @@ interface DrawerProps {
 		status: TicketStatus,
 		notes?: string,
 	) => Promise<void> | void;
+	onAssignTechnician?: (
+		ticketId: string,
+		technicianId: string | null,
+	) => Promise<void> | void;
+	technicians?: Technician[];
 	onDeleteTicket?: (ticketId: string) => Promise<void> | void;
 }
 
@@ -74,6 +80,8 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 	onClose,
 	onUpdateStatus,
 	onDeleteTicket,
+	technicians,
+	onAssignTechnician,
 }) => {
 	const [techNotes, setTechNotes] = useState("");
 	const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -273,7 +281,6 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 										})}
 									</div>
 								</div>
-
 								{/* Customer Details */}
 								<div className="bg-[#111827]/70 rounded-xl p-4 border border-slate-800/80">
 									<h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
@@ -306,7 +313,6 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 										)}
 									</div>
 								</div>
-
 								{/* Hardware & Fault Details */}
 								<div className="space-y-3">
 									<h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
@@ -343,6 +349,66 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 									)}
 								</div>
 
+								{/* Technician Assignment Section*/}
+								<div className="bg-[#111827]/70 border border-slate-800/80 rounded-xl p-4">
+									<div className="flex items-center justify-between mb-2.5">
+										<h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+											<User className="w-3.5 h-3.5 text-indigo-400" /> Assigned
+											Technician
+										</h3>
+										{ticket.assignedTechnician &&
+											!isDelivered &&
+											onAssignTechnician && (
+												<button
+													type="button"
+													onClick={() => onAssignTechnician(ticket.id, null)}
+													className="text-[11px] text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+												>
+													Unassign
+												</button>
+											)}
+									</div>
+
+									<div className="flex flex-wrap gap-2">
+										{(technicians || []).map((tech) => {
+											const isAssigned =
+												ticket.assignedTechnician?.id === tech.id;
+											return (
+												<button
+													key={tech.id}
+													type="button"
+													disabled={isDelivered}
+													onClick={() =>
+														!isDelivered &&
+														onAssignTechnician?.(ticket.id, tech.id)
+													}
+													className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all duration-150 cursor-pointer ${
+														isAssigned
+															? "bg-indigo-950/80 border-indigo-500 text-indigo-200 shadow-md shadow-indigo-600/20"
+															: isDelivered
+																? "opacity-40 border-slate-800 bg-slate-900/40 text-slate-500 cursor-not-allowed"
+																: "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800"
+													}`}
+												>
+													<span
+														style={{ backgroundColor: tech.avatarColor }}
+														className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 font-mono"
+													>
+														{tech.name
+															.split(" ")
+															.map((n) => n[0])
+															.join("")}
+													</span>
+													<span>{tech.name}</span>
+													{isAssigned && (
+														<Check className="w-3 h-3 text-indigo-400 ml-0.5" />
+													)}
+												</button>
+											);
+										})}
+									</div>
+								</div>
+								
 								{/* Tech & Parts Log */}
 								<div className="bg-[#111827]/70 border border-slate-800/80 rounded-xl p-4 space-y-2.5">
 									<div className="flex items-center justify-between">
@@ -479,7 +545,6 @@ export const TicketDetailDrawer: React.FC<DrawerProps> = ({
 										</div>
 									)}
 								</div>
-
 								{/* Pricing & Intake Date */}
 								<div className="grid grid-cols-2 gap-3 pt-2">
 									<div className="border border-slate-800 bg-[#111827]/50 p-3.5 rounded-xl flex items-center gap-3">

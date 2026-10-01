@@ -17,6 +17,7 @@ export interface TicketAttributes {
 	id: string;
 	ticketNumber: string;
 	customerId: string;
+	assignedTechnicianId?: string | null; // 👈 Add this field
 	deviceBrand: string;
 	deviceModel: string;
 	imeiOrSerial?: string;
@@ -36,6 +37,7 @@ export interface TicketCreationAttributes extends Optional<
 	TicketAttributes,
 	| "id"
 	| "ticketNumber"
+	| "assignedTechnicianId"
 	| "imeiOrSerial"
 	| "clientNotes"
 	| "diagnosticNotes"
@@ -53,6 +55,7 @@ export class Ticket
 	declare id: string;
 	declare ticketNumber: string;
 	declare customerId: string;
+	declare assignedTechnicianId?: string | null; // 👈 Add this field
 	declare deviceBrand: string;
 	declare deviceModel: string;
 	declare imeiOrSerial?: string;
@@ -83,6 +86,10 @@ Ticket.init(
 		customerId: {
 			type: DataTypes.STRING,
 			allowNull: false,
+		},
+		assignedTechnicianId: {
+			type: DataTypes.STRING,
+			allowNull: true,
 		},
 		deviceBrand: {
 			type: DataTypes.STRING,
