@@ -1,7 +1,11 @@
 // frontend/src/App.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Navbar } from "./components/Navbar";
 import { KanbanBoard } from "./components/KanbanBoard";
+import {
+	BoardQuickFilters,
+	type FilterState,
+} from "./components/BoardQuickFilters";
 import { CreateTicketModal } from "./components/CreateTicketModal";
 import { TicketDetailDrawer } from "./components/TicketDetailDrawer";
 import { repairApi } from "./services/api";
@@ -12,6 +16,38 @@ export function App() {
 	const [loading, setLoading] = useState(false);
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+
+	// 🔍 Quick Filter State
+	// 1. Update filter state initialization:
+	const [filters, setFilters] = useState<FilterState>({
+		priorities: [],
+		brands: [],
+		technicians: [],
+	});
+
+	// 2. Update displayedTickets useMemo to include technician filtering:
+	const displayedTickets = useMemo(() => {
+		return tickets.filter((ticket) => {
+			if (
+				filters.priorities.length > 0 &&
+				!filters.priorities.includes(ticket.priority)
+			) {
+				return false;
+			}
+			if (
+				filters.brands.length > 0 &&
+				!filters.brands.includes(ticket.deviceBrand?.trim())
+			) {
+				return false;
+			}
+			// If technician filter is used (e.g. unassigned)
+			if (filters.technicians.includes("unassigned")) {
+				// All current tickets are unassigned
+				return true;
+			}
+			return true;
+		});
+	}, [tickets, filters]);
 
 	const fetchTickets = async () => {
 		setLoading(true);
@@ -120,9 +156,18 @@ export function App() {
 				loading={loading}
 			/>
 
+			{/* 🎛 Quick Filter Bar */}
+			<BoardQuickFilters
+				tickets={tickets}
+				filters={filters}
+				onFilterChange={setFilters}
+				totalTicketsCount={tickets.length}
+				matchingTicketsCount={displayedTickets.length}
+			/>
+
 			<main className="flex-1 w-full max-w-full overflow-x-auto relative">
 				<KanbanBoard
-					tickets={tickets}
+					tickets={displayedTickets}
 					onTicketsReorder={(reordered) => setTickets(reordered)}
 					onStatusChange={handleUpdateStatus}
 					onDeleteTicket={handleDeleteTicket}
