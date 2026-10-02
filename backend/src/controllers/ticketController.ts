@@ -118,7 +118,29 @@ export const ticketController = {
 				});
 			}
 
-			// 3. Generate Ticket ID and Ticket Number upfront
+			// 3. Extract and validate Assigned Technician ID (Intake assignment)
+			const requestedTechId =
+				ticketData.assignedTechnicianId ||
+				req.body.assignedTechnicianId ||
+				null;
+			let validAssignedTechId: string | null = null;
+
+			if (requestedTechId) {
+				const techUser = await User.findOne({
+					where: { id: requestedTechId, isActive: true },
+				});
+
+				// Ensure the assigned user is valid and has technician/admin privileges
+				if (techUser && ["technician", "admin"].includes(techUser.role)) {
+					validAssignedTechId = techUser.id;
+				} else {
+					console.warn(
+						`⚠️️ Invalid or inactive technician ID received at intake: ${requestedTechId}. Defaulting to unassigned.`,
+					);
+				}
+			}
+
+			// 4. Generate Ticket ID and Ticket Number upfront
 			const newTicketId = crypto.randomUUID();
 			const ticketNumber = `TICK-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -129,11 +151,12 @@ export const ticketController = {
 					? parseFloat(String(rawCost))
 					: undefined;
 
-			// 4. Create Ticket record
+			// 5. Create Ticket record with assignedTechnicianId
 			const newTicket = await Ticket.create({
 				id: newTicketId,
 				ticketNumber,
 				customerId: resolvedCustomerId,
+				assignedTechnicianId: validAssignedTechId, // 👈 Saved directly at creation
 				deviceBrand: ticketData.deviceBrand?.trim() || "Unknown",
 				deviceModel: ticketData.deviceModel?.trim() || "Unknown",
 				imeiOrSerial: ticketData.imeiOrSerial?.trim() || undefined,
@@ -152,11 +175,20 @@ export const ticketController = {
 				newTicket.ticketNumber,
 				"with ID:",
 				newTicket.id,
+				"Assigned to:",
+				validAssignedTechId,
 			);
 
-			// 5. Fetch with Customer populated and return directly
+			// 6. Fetch with both Customer AND assignedTechnician populated
 			const result = await Ticket.findByPk(newTicket.id, {
-				include: [{ model: Customer, as: "customer" }],
+				include: [
+					{ model: Customer, as: "customer" },
+					{
+						model: User,
+						as: "assignedTechnician",
+						attributes: ["id", "name", "email", "avatarColor", "role"],
+					},
+				],
 			});
 
 			return res

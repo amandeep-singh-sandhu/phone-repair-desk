@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { sequelize } from "./src/config/database";
 import apiRoutes from "./src/routes/api";
+import { seedInitialUsers } from "./src/utils/seedAdmin";
 
 dotenv.config();
 
@@ -30,6 +31,9 @@ const startServer = async () => {
 		// { alter: true } synchronizes schema non-destructively
 		await sequelize.sync({ alter: true });
 		console.log("✅ Database models synchronized.");
+
+		// Seed admin & starter users
+		await seedInitialUsers();
 
 		app.listen(PORT, () => {
 			console.log(`🚀 FixDesk Server running on http://localhost:${PORT}`);

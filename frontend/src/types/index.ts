@@ -19,7 +19,6 @@ export interface Customer {
 	createdAt: string;
 }
 
-// Add the Technician interface:
 export interface Technician {
 	id: string;
 	name: string;
@@ -34,7 +33,7 @@ export interface Ticket {
 	customerId: string;
 	customer?: Customer;
 	assignedTechnicianId?: string | null;
-	assignedTechnician?: Technician | null; // Associated technician object
+	assignedTechnician?: Technician | null;
 	deviceBrand: string;
 	deviceModel: string;
 	imeiOrSerial?: string;
@@ -57,6 +56,7 @@ export type CreateTicketPayload = {
 		phone: string;
 		email?: string;
 	};
+	assignedTechnicianId?: string | null; // Added: Direct technician assignment at intake
 	deviceBrand: string;
 	deviceModel: string;
 	imeiOrSerial?: string;
@@ -68,3 +68,27 @@ export type CreateTicketPayload = {
 	priority: PriorityLevel;
 	status: TicketStatus;
 };
+
+export interface AuthUser {
+	id: string;
+	name: string;
+	email: string;
+	role: UserRole;
+	avatarColor: string;
+}
+
+export interface AuthResponse {
+	success: boolean;
+	token: string;
+	user: AuthUser;
+	message?: string;
+}
+
+export interface AuthContextType {
+	user: AuthUser | null;
+	token: string | null;
+	isAuthenticated: boolean;
+	isLoading: boolean;
+	login: (token: string, user: AuthUser) => void;
+	logout: () => void;
+}

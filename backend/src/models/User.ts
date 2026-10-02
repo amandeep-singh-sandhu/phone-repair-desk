@@ -9,7 +9,7 @@ export interface UserAttributes {
 	id: string;
 	name: string;
 	email: string;
-	passwordHash?: string;
+	passwordHash: string;
 	role: UserRole;
 	avatarColor: string;
 	isActive: boolean;
@@ -29,10 +29,11 @@ export class User
 	declare id: string;
 	declare name: string;
 	declare email: string;
-	declare passwordHash?: string;
+	declare passwordHash: string;
 	declare role: UserRole;
 	declare avatarColor: string;
 	declare isActive: boolean;
+
 	declare readonly createdAt: Date;
 	declare readonly updatedAt: Date;
 }
@@ -58,7 +59,7 @@ User.init(
 		},
 		passwordHash: {
 			type: DataTypes.STRING,
-			allowNull: true, // Nullable until Auth registration flow is active
+			allowNull: false, // Nullable until Auth registration flow is active
 		},
 		role: {
 			type: DataTypes.ENUM("admin", "technician", "front_desk"),
