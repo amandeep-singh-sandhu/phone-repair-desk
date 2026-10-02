@@ -1,7 +1,12 @@
 // frontend/src/components/CreateTicketModal.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { CreateTicketPayload, PriorityLevel, Customer } from "../types";
+import type {
+	CreateTicketPayload,
+	PriorityLevel,
+	Customer,
+	Technician,
+} from "../types";
 import { repairApi } from "../services/api";
 import {
 	POPULAR_BRANDS,
@@ -29,6 +34,9 @@ import {
 	AlertCircle,
 	AlertTriangle,
 	Loader2,
+	Wrench,
+	ChevronDown,
+
 } from "lucide-react";
 
 interface ModalProps {
@@ -70,6 +78,12 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 	const [submitting, setSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState<string | null>(null);
 
+	// Technician assignment at intake
+	const [assignedTechnicianId, setAssignedTechnicianId] = useState<
+		string | null
+	>(null);
+	const [technicians, setTechnicians] = useState<Technician[]>([]);
+
 	// Duplicate verification state
 	const [checkingDuplicate, setCheckingDuplicate] = useState(false);
 	const [duplicateCustomer, setDuplicateCustomer] =
@@ -93,10 +107,12 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 	const [form, setForm] = useState<TicketFormData>(initialForm);
 	const [touched, setTouched] = useState<Record<string, boolean>>({});
 
+	const [techDropdownOpen, setTechDropdownOpen] = useState(false);
+	const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
+
 	const markTouched = (field: string) =>
 		setTouched((prev) => ({ ...prev, [field]: true }));
 
-	// Validation mapping
 	const errors = useMemo(
 		() => validateTicketForm(form, customerTab, Boolean(selectedCustomer)),
 		[form, customerTab, selectedCustomer],
@@ -113,13 +129,18 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 		!errors.issueDescription &&
 		!errors.estimatedCost &&
 		!errors.imeiOrSerial;
+	Boolean(assignedTechnicianId); // 👈 Strictly required
 
-	// Fetch recent clients & handle shortcuts
+	// Fetch active technicians and recent clients on modal open
 	useEffect(() => {
 		if (isOpen) {
 			repairApi.searchCustomers("").then((res) => {
 				if (res?.length) setRecentClients(res.slice(0, 3));
 			});
+			repairApi
+				.getTechnicians()
+				.then((techs) => setTechnicians(Array.isArray(techs) ? techs : []))
+				.catch((err) => console.error("Failed to load technicians", err));
 		}
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape") onClose();
@@ -152,6 +173,7 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 			setStep(1);
 			setCustomerTab("new");
 			setSelectedCustomer(null);
+			setAssignedTechnicianId(null);
 			setSearchQuery("");
 			setCustomerNotes("");
 			setNotificationPref("whatsapp");
@@ -177,7 +199,6 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 		}));
 	};
 
-	// 🔍 Verify customer existence before stepping to hardware configuration
 	const handleGoToStep2 = async () => {
 		if (customerTab === "new") {
 			setTouched((prev) => ({
@@ -214,7 +235,6 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 		}
 	};
 
-	// Handle linking existing customer discovered via duplicate check
 	const handleUseExistingCustomer = (existing: ExistingCustomerMatch) => {
 		setSelectedCustomer({
 			id: existing.id,
@@ -244,7 +264,15 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 			issueDescription: true,
 			estimatedCost: true,
 			imeiOrSerial: true,
+			assignedTechnician: true, // 👈 Track touched
 		});
+
+		if (!assignedTechnicianId) {
+			setSubmitError(
+				"Please assign an active specialist to take ownership of this repair.",
+			);
+			return;
+		}
 
 		if (!isStep1Valid || !isStep2Valid) return;
 
@@ -258,6 +286,7 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 					phone: form.customerPhone.trim(),
 					email: form.customerEmail.trim() || undefined,
 				},
+				assignedTechnicianId: assignedTechnicianId || null,
 				deviceBrand: form.deviceBrand.trim(),
 				deviceModel: form.deviceModel.trim(),
 				imeiOrSerial: form.imeiOrSerial.trim() || undefined,
@@ -391,7 +420,7 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 											</button>
 										</div>
 
-										{/* DUPLICATE CUSTOMER INTERCEPTION ALERT */}
+										{/* Duplicate Customer Alert */}
 										<AnimatePresence>
 											{duplicateCustomer && (
 												<motion.div
@@ -444,7 +473,7 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 											)}
 										</AnimatePresence>
 
-										{/* NEW CUSTOMER SUB-VIEW */}
+										{/* New Customer Sub-view */}
 										{customerTab === "new" ? (
 											<div className="space-y-2.5 pt-0.5">
 												<div>
@@ -491,21 +520,17 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 															type="tel"
 															placeholder="(555) 000-0000"
 															value={form.customerPhone}
-															maxLength={14} // (XXX) XXX-XXXX is exactly 14 characters
+															maxLength={14}
 															onBlur={() => markTouched("customerPhone")}
 															onChange={(e) => {
 																const digitsOnly = e.target.value.replace(
 																	/\D/g,
 																	"",
 																);
-
-																// Strict 10-digit cap: ignore further typing if exceeding 10 digits
 																if (digitsOnly.length > 10) return;
-
 																if (duplicateCustomer) {
 																	setDuplicateCustomer(null);
 																}
-
 																setForm({
 																	...form,
 																	customerPhone: formatPhoneNumber(
@@ -519,8 +544,6 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 																	: "border-slate-800 focus:border-indigo-500"
 															}`}
 														/>
-
-														{/* Error Message or Sub-label */}
 														{touched.customerPhone && errors.customerPhone ? (
 															<p className="text-[10px] text-rose-400 mt-1 font-medium flex items-center gap-1">
 																<span>•</span> {errors.customerPhone}
@@ -607,7 +630,7 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 												</div>
 											</div>
 										) : (
-											/* RETURNING CLIENT SUB-VIEW */
+											/* Returning Client Sub-view */
 											<div className="space-y-3 pt-0.5">
 												<div className="relative">
 													{searching ? (
@@ -649,7 +672,7 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 														<button
 															type="button"
 															onClick={() => setSelectedCustomer(null)}
-															className="text-xs text-slate-400 hover:text-white underline"
+															className="text-xs text-slate-400 hover:text-white underline cursor-pointer"
 														>
 															Change
 														</button>
@@ -695,7 +718,7 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 										)}
 									</motion.div>
 								) : (
-									/* STEP 2: HARDWARE & DEFECT */
+									/* STEP 2: HARDWARE, DEFECT & SPECIALIST */
 									<motion.div
 										key="step2"
 										initial={{ opacity: 0, x: 16 }}
@@ -849,48 +872,264 @@ export const CreateTicketModal: React.FC<ModalProps> = ({
 											/>
 										</div>
 
+										{/* Specialist Assignment & Priority with Framer Motion Spring Popover (Opens Downward) */}
 										<div className="grid grid-cols-2 gap-3">
-											<div>
-												<label className="block text-xs font-medium text-slate-300 mb-1">
-													Quote Estimate ($)
-												</label>
-												<div className="relative">
-													<DollarSign className="w-4 h-4 text-emerald-400 absolute left-3.5 top-2.5" />
-													<input
-														type="number"
-														step="0.01"
-														value={form.estimatedCost}
-														onChange={(e) =>
-															setForm({
-																...form,
-																estimatedCost: e.target.value,
-															})
-														}
-														className="w-full text-sm rounded-xl pl-10 pr-3.5 py-2 bg-slate-950/80 border border-slate-800 text-white focus:border-indigo-500 outline-hidden"
-													/>
+											{/* Assigned Specialist */}
+											<div className="relative">
+												<div className="flex justify-between items-center mb-1">
+													<label className="text-xs font-medium text-slate-300 flex items-center gap-1">
+														<Wrench className="w-3.5 h-3.5 text-indigo-400" />
+														Assigned Specialist *
+													</label>
+													{touched.assignedTechnician &&
+														!assignedTechnicianId && (
+															<span className="text-[10px] text-rose-400">
+																Specialist required
+															</span>
+														)}
 												</div>
+
+												{/* Trigger Button */}
+												<button
+													type="button"
+													onClick={() => {
+														setPriorityDropdownOpen(false);
+														setTechDropdownOpen(!techDropdownOpen);
+														markTouched("assignedTechnician");
+													}}
+													className={`w-full flex items-center justify-between text-left text-sm rounded-xl px-3.5 py-2 bg-slate-950/80 border transition-all cursor-pointer ${
+														touched.assignedTechnician && !assignedTechnicianId
+															? "border-rose-500/80 focus:ring-1 focus:ring-rose-500"
+															: "border-slate-800 hover:border-slate-700"
+													}`}
+												>
+													<div className="flex items-center gap-2 truncate">
+														{assignedTechnicianId ? (
+															(() => {
+																const selectedTech = technicians.find(
+																	(t) => t.id === assignedTechnicianId,
+																);
+																return (
+																	<>
+																		<div
+																			style={{
+																				backgroundColor:
+																					selectedTech?.avatarColor ||
+																					"#6366f1",
+																			}}
+																			className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-xs"
+																		>
+																			{selectedTech?.name
+																				.slice(0, 2)
+																				.toUpperCase()}
+																		</div>
+																		<span className="text-slate-200 text-xs font-medium truncate">
+																			{selectedTech?.name}
+																		</span>
+																		<span className="text-[9px] uppercase font-mono px-1 py-0.5 rounded bg-slate-800 text-slate-400">
+																			{selectedTech?.role}
+																		</span>
+																	</>
+																);
+															})()
+														) : (
+															<span className="text-slate-500 text-xs">
+																-- Select an Active Specialist --
+															</span>
+														)}
+													</div>
+													<ChevronDown
+														className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${
+															techDropdownOpen
+																? "rotate-180 text-indigo-400"
+																: ""
+														}`}
+													/>
+												</button>
+
+												{/* Popover Menu: Opens Downward */}
+												<AnimatePresence>
+													{techDropdownOpen && (
+														<>
+															<div
+																className="fixed inset-0 z-40"
+																onClick={() => setTechDropdownOpen(false)}
+															/>
+															<motion.div
+																initial={{ opacity: 0, y: -6, scale: 0.96 }}
+																animate={{ opacity: 1, y: 0, scale: 1 }}
+																exit={{ opacity: 0, y: -6, scale: 0.96 }}
+																transition={{
+																	type: "spring",
+																	damping: 25,
+																	stiffness: 350,
+																}}
+																className="absolute left-0 top-full mt-1.5 w-full bg-[#0c1222]/95 backdrop-blur-xl border border-slate-800/90 rounded-xl shadow-2xl p-1 z-50 overflow-hidden"
+															>
+																<div className="px-2.5 py-1.5 border-b border-slate-800/70 mb-1">
+																	<span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+																		Active Workshop Technicians
+																	</span>
+																</div>
+																<div className="max-h-48 overflow-y-auto space-y-0.5">
+																	{technicians
+																		.filter(
+																			(tech) =>
+																				tech.role === "technician" ||
+																				tech.role === "admin",
+																		)
+																		.map((tech) => {
+																			const isSelected =
+																				assignedTechnicianId === tech.id;
+																			return (
+																				<button
+																					key={tech.id}
+																					type="button"
+																					onClick={() => {
+																						setAssignedTechnicianId(tech.id);
+																						setTechDropdownOpen(false);
+																						if (submitError)
+																							setSubmitError(null);
+																					}}
+																					className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+																						isSelected
+																							? "bg-indigo-600/20 text-indigo-300 font-medium"
+																							: "text-slate-300 hover:bg-slate-800/60"
+																					}`}
+																				>
+																					<div className="flex items-center gap-2 truncate">
+																						<div
+																							style={{
+																								backgroundColor:
+																									tech.avatarColor || "#6366f1",
+																							}}
+																							className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+																						>
+																							{tech.name
+																								.slice(0, 2)
+																								.toUpperCase()}
+																						</div>
+																						<span className="truncate">
+																							{tech.name}
+																						</span>
+																						<span className="text-[9px] uppercase font-mono px-1 py-0.5 rounded bg-slate-800/80 text-slate-400">
+																							{tech.role}
+																						</span>
+																					</div>
+																					{isSelected && (
+																						<Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+																					)}
+																				</button>
+																			);
+																		})}
+																</div>
+															</motion.div>
+														</>
+													)}
+												</AnimatePresence>
 											</div>
 
-											<div>
+											{/* Priority Level Popover (Opens Downward) */}
+											<div className="relative">
 												<label className="text-xs font-medium text-slate-300 mb-1 flex items-center gap-1">
-													<ShieldAlert className="w-3.5 h-3.5 text-amber-400" />{" "}
+													<ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
 													Priority
 												</label>
-												<select
-													value={form.priority}
+
+												<button
+													type="button"
+													onClick={() => {
+														setTechDropdownOpen(false);
+														setPriorityDropdownOpen(!priorityDropdownOpen);
+													}}
+													className="w-full flex items-center justify-between text-left text-sm rounded-xl px-3.5 py-2 bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
+												>
+													<span className="text-xs font-medium capitalize text-slate-200">
+														{form.priority}
+													</span>
+													<ChevronDown
+														className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+															priorityDropdownOpen
+																? "rotate-180 text-indigo-400"
+																: ""
+														}`}
+													/>
+												</button>
+
+												<AnimatePresence>
+													{priorityDropdownOpen && (
+														<>
+															<div
+																className="fixed inset-0 z-40"
+																onClick={() => setPriorityDropdownOpen(false)}
+															/>
+															<motion.div
+																initial={{ opacity: 0, y: -6, scale: 0.96 }}
+																animate={{ opacity: 1, y: 0, scale: 1 }}
+																exit={{ opacity: 0, y: -6, scale: 0.96 }}
+																transition={{
+																	type: "spring",
+																	damping: 25,
+																	stiffness: 350,
+																}}
+																className="absolute left-0 top-full mt-1.5 w-full bg-[#0c1222]/95 backdrop-blur-xl border border-slate-800/90 rounded-xl shadow-2xl p-1 z-50 overflow-hidden"
+															>
+																{(
+																	[
+																		"low",
+																		"medium",
+																		"high",
+																		"urgent",
+																	] as PriorityLevel[]
+																).map((level) => {
+																	const isSelected = form.priority === level;
+																	return (
+																		<button
+																			key={level}
+																			type="button"
+																			onClick={() => {
+																				setForm({ ...form, priority: level });
+																				setPriorityDropdownOpen(false);
+																			}}
+																			className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs capitalize transition-colors cursor-pointer ${
+																				isSelected
+																					? "bg-indigo-600/20 text-indigo-300 font-medium"
+																					: "text-slate-300 hover:bg-slate-800/60"
+																			}`}
+																		>
+																			<span>{level}</span>
+																			{isSelected && (
+																				<Check className="w-3.5 h-3.5 text-indigo-400" />
+																			)}
+																		</button>
+																	);
+																})}
+															</motion.div>
+														</>
+													)}
+												</AnimatePresence>
+											</div>
+										</div>
+
+										{/* Quote Estimate */}
+										<div>
+											<label className="block text-xs font-medium text-slate-300 mb-1">
+												Quote Estimate ($)
+											</label>
+											<div className="relative">
+												<DollarSign className="w-4 h-4 text-emerald-400 absolute left-3.5 top-2.5" />
+												<input
+													type="number"
+													step="0.01"
+													value={form.estimatedCost}
 													onChange={(e) =>
 														setForm({
 															...form,
-															priority: e.target.value as PriorityLevel,
+															estimatedCost: e.target.value,
 														})
 													}
-													className="w-full text-sm rounded-xl px-3.5 py-2 bg-slate-950/80 border border-slate-800 text-white focus:border-indigo-500 outline-hidden cursor-pointer"
-												>
-													<option value="low">Low</option>
-													<option value="medium">Medium</option>
-													<option value="high">High</option>
-													<option value="urgent">Urgent</option>
-												</select>
+													className="w-full text-sm rounded-xl pl-10 pr-3.5 py-2 bg-slate-950/80 border border-slate-800 text-white focus:border-indigo-500 outline-hidden"
+												/>
 											</div>
 										</div>
 

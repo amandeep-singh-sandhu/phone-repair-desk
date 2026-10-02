@@ -131,3 +131,61 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
 			.json({ success: false, message: "Failed to retrieve session user." });
 	}
 };
+
+
+/**
+ * Updates the authenticated user's profile information.
+ * Allows the user to change their display name, avatar color, and optionally
+ * their password after verifying the current password. Returns the updated
+ * safe user profile in the response payload.
+ */
+export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, message: 'Unauthenticated.' });
+      return;
+    }
+
+    const { name, currentPassword, newPassword, avatarColor } = req.body;
+    const user = await User.findByPk(req.user.id);
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+
+    // If changing password, verify current password
+    if (newPassword) {
+      if (!currentPassword) {
+        res.status(400).json({ success: false, message: 'Current password is required to set a new password.' });
+        return;
+      }
+      const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isMatch) {
+        res.status(400).json({ success: false, message: 'Incorrect current password.' });
+        return;
+      }
+      user.passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    if (name) user.name = name.trim();
+    if (avatarColor) user.avatarColor = avatarColor;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully.',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatarColor: user.avatarColor,
+      },
+    });
+  } catch (error) {
+    console.error('[AUTH] Failed to update profile:', error);
+    res.status(500).json({ success: false, message: 'Failed to update profile.' });
+  }
+};

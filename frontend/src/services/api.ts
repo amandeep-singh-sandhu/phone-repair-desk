@@ -229,4 +229,22 @@ export const repairApi = {
 			);
 		}
 	},
+
+	updateProfile: async (payload: {
+		name?: string;
+		avatarColor?: string;
+		currentPassword?: string;
+		newPassword?: string;
+	}): Promise<{ success: boolean; user: AuthUser }> => {
+		const res = await fetch(`${API_BASE_URL}/auth/profile`, {
+			method: "PATCH",
+			headers: getAuthHeaders(),
+			body: JSON.stringify(payload),
+		});
+		if (!res.ok) {
+			const errorData = await res.json().catch(() => ({}));
+			throw new Error(errorData.message || "Failed to update profile");
+		}
+		return res.json();
+	},
 };

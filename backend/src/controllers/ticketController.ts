@@ -111,6 +111,30 @@ export const ticketController = {
 				console.log("✅ Resolved Customer ID:", resolvedCustomerId);
 			}
 
+			// 3. Extract and enforce Assigned Technician ID
+			const requestedTechId =
+				ticketData.assignedTechnicianId || req.body.assignedTechnicianId || null;
+
+			if (!requestedTechId) {
+				return res.status(400).json({
+					error: "Validation failed",
+					detail:
+						"Every ticket must be assigned to an active technician at intake.",
+				});
+			}
+
+			const techUser = await User.findOne({
+				where: { id: requestedTechId, isActive: true },
+			});
+
+			if (!techUser || !["technician", "admin"].includes(techUser.role)) {
+				return res.status(400).json({
+					error: "Validation failed",
+					detail:
+						"The assigned specialist does not exist, is deactivated, or does not hold a technician role.",
+				});
+			}
+
 			if (!resolvedCustomerId) {
 				return res.status(400).json({
 					error: "SequelizeValidationError",
@@ -119,10 +143,7 @@ export const ticketController = {
 			}
 
 			// 3. Extract and validate Assigned Technician ID (Intake assignment)
-			const requestedTechId =
-				ticketData.assignedTechnicianId ||
-				req.body.assignedTechnicianId ||
-				null;
+			
 			let validAssignedTechId: string | null = null;
 
 			if (requestedTechId) {
